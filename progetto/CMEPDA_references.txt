@@ -1,0 +1,19 @@
+Articoli suggeriti dal prof:
+
+https://root.cern.ch/doc/master/df103__NanoAODHiggsAnalysis_8py.html
+http://opendata.cern.ch/record/5500
+http://opendata.cern.ch/record/5501
+https://inspirehep.net/literature/1124338
+https://arxiv.org/pdf/1207.7235.pdf
+https://inspirehep.net/literature/1088604
+https://arxiv.org/pdf/1202.1997.pdf
+http://opendata.cern.ch/record/1500
+
+articoli sul MELA:
+https://iopscience.iop.org/article/10.1088/1742-6596/455/1/012027/pdf
+https://arxiv.org/pdf/1606.03107.pdf
+https://arxiv.org/abs/1212.6639
+
+altri articoli:
+https://arxiv.org/pdf/1706.09936.pdf
+
