@@ -101,15 +101,13 @@ def standard_request(df_s, df_b, df_d):
     """All the necessary requests for the standard analysis will be prepared:
     """
     #Two filters will be applied but not shown to reduce the number of processed data
-    df_2el2mu = df_s.Filter("nElectron>=2 && nMuon>=2",
+    df_2e2m = df_s.Filter("nElectron>=2 && nMuon>=2",
                          "Only events with two or more Electrons and Muons")
-    df_iso = df_2el2mu.Filter("All(abs(Electron_pfRelIso03_all)<0.40) &&"
-                              "All(abs(Muon_pfRelIso04_all)<0.40)",
-                              "Require good isolation")
 
     #Request filtered and unfiltered data
-    list_h_unfil, list_h_fil, list_rep = show_cut(df_iso)
-    return list_h_unfil, list_h_fil, list_rep
+    list_h_unfil, list_h_fil, list_rep = show_cut(df_2e2m)
+    dr_report = good_events(df_2e2m)
+    return list_h_unfil, list_h_fil, list_rep, dr_report
 
 def show_cut(df):
     """Comparison between unfiltered and filtered data considering the main cuts
@@ -120,36 +118,104 @@ def show_cut(df):
     list_h_unfil = []
     list_h_fil = []
     list_report = []
-    #1st filter:Eta cut
-    h_unfil_eleta = df.Histo1D(("h_sig_Eleta", "Electron_eta", 36,-3, 3), "Electron_eta")
-    h_unfil_mueta = df.Histo1D(("h_sig_Mueta", "Muon_eta", 36, -3, 3), "Muon_eta") 
-    
-    df_eta = df.Filter("All(abs(Electron_eta)<2.5) && All(abs(Muon_eta)<2.4)",
-                           "Eta_cuts")
-    h_fil_eleta = df_eta.Histo1D(("h_sig_Eleta","",36,-3,3),"Electron_eta")
-    h_fil_mueta = df_eta.Histo1D("Muon_eta")
 
-    #2nd filter:Pt cut
-    h_unfil_elpt = df.Histo1D("Electron_pt")
-    h_unfil_mupt = df.Histo1D("Muon_pt") 
+    #1st filter:Eta cut
+    h_unfil_eleta = df.Histo1D(("h_Eleta", "Electron_eta", 56, -2.6, 2.6), "Electron_eta")
+    h_unfil_mueta = df.Histo1D(("h_Mueta", "Muon_eta", 56, -2.6, 2.6), "Muon_eta") 
+    
+    df_eleta = df.Filter("All(abs(Electron_eta)<2.5)", "Eleta cut")
+    df_mueta = df.Filter("All(abs(Muon_eta)<2.4)", "Mueta cut")
+    h_fil_eleta = df_eleta.Histo1D(("h_Eleta","", 56, -2.6, 2.6), "Electron_eta")
+    h_fil_mueta = df_mueta.Histo1D(("h_Mueta","", 56, -2.6, 2.6), "Muon_eta")
+
+    #2nd filter:Dr cut
+    df_dr = df.Define("Electron_dr",
+                             "dr_def(Electron_eta, Electron_phi)").Define("Muon_dr",
+                             "dr_def(Muon_eta, Muon_phi)")
+    h_unfil_eldr = df_dr.Histo1D(("h_eldr","Electron_dr", 56, -0.5, 6), "Electron_dr")
+    h_unfil_mudr = df_dr.Histo1D(("h_mudr","Muon_dr", 56, -0.5, 6), "Muon_dr")
+
+    df_eldr = df_dr.Filter("Electron_dr>=0.02","Eldr cut")
+    df_mudr = df_dr.Filter("Muon_dr>=0.02","Mudr cut")
+    h_fil_eldr = df_eldr.Histo1D(("h_eldr","Electron_dr", 56, -0.5, 6), "Electron_dr")
+    h_fil_mudr = df_mudr.Histo1D(("h_mudr","Muon_dr", 56, -0.5, 6), "Muon_dr")
+
+    #3rd filter:Pt cut
+    h_unfil_elpt = df.Histo1D(("h_Elpt", "Electron_pt", 56, -0.5, 120), "Electron_pt")
+    h_unfil_mupt = df.Histo1D(("h_Mupt", "Muon_pt", 56, -0.5, 120), "Muon_pt")
 
     df_pt = df.Filter("pt_cut(Muon_pt, Electron_pt)", "Pt cuts")
-    h_fil_elpt = df_pt.Histo1D("Electron_pt")
-    h_fil_mupt = df_pt.Histo1D("Muon_pt")
+    h_fil_elpt = df_pt.Histo1D(("h_Elpt", "", 56, -0.5, 120), "Electron_pt")
+    h_fil_mupt = df_pt.Histo1D(("h_Mupt", "", 56, -0.5, 120), "Muon_pt")
 
-    list_h_unfil.extend([h_unfil_eleta, h_unfil_mueta, h_unfil_elpt, h_unfil_mupt])
-    list_h_fil.extend([h_fil_eleta, h_fil_mueta, h_fil_elpt, h_fil_mupt])
-    list_report.extend([df_eta.Report(), df_pt.Report()])
-    
+    #4th filter: Good isolation
+    h_unfil_eliso3 = df.Histo1D(("h_eliso3","Electron_Iso3", 400, -1020, 50), "Electron_pfRelIso03_all")
+    h_unfil_muiso4 = df.Histo1D(("h_muiso4","Muon_Iso4", 400, -1020, 50), "Muon_pfRelIso04_all")
+
+    df_eliso = df.Filter("All(abs(Electron_pfRelIso03_all)<0.40)", "ElIso03 cut")
+    df_muiso = df.Filter("All(abs(Muon_pfRelIso04_all)<0.40)", "MuIso04 cut")   
+    h_fil_eliso3 = df_eliso.Histo1D(("h_eliso3","", 400, -1020, 50), "Electron_pfRelIso03_all")
+    h_fil_muiso4 = df_muiso.Histo1D(("h_muiso4","", 400, -1020, 50), "Muon_pfRelIso04_all")
+
+    #5th filter: Electron track
+    el_sip3d = "sqrt(Electron_dxy*Electron_dxy + Electron_dz*Electron_dz)/sqrt(Electron_dxyErr*Electron_dxyErr+ Electron_dzErr*Electron_dzErr)"
+    df_eltrack = df.Define("Electron_sip3d", el_sip3d)
+    h_unfil_elsip3d = df_eltrack.Histo1D(("h_elsip3d", "Electron_sip3d", 56, -0.5, 5),
+                                          "Electron_sip3d")
+    h_unfil_eldxy = df_eltrack.Histo1D(("h_eldxy", "Electron_dxy", 56, -0.03, 0.03),
+                                        "Electron_dxy")
+    h_unfil_eldz = df_eltrack.Histo1D(("h_eldz", "Electron_dz", 56, -0.03, 0.03),
+                                       "Electron_dz")
+
+    df_elsip3d = df_eltrack.Filter("All(Electron_sip3d<4)", "Elsip3d cut")
+    df_eldxy = df_eltrack.Filter("All(abs(Electron_dxy)<0.5)", "Eldxy cut")
+    df_eldz = df_eltrack.Filter(" All(abs(Electron_dz)<1.0)", "Eldz cut")
+    h_fil_elsip3d = df_elsip3d.Histo1D(("h_elsip3d", "", 56, -0.5, 5), "Electron_sip3d")
+    h_fil_eldxy = df_eldxy.Histo1D(("h_eldxy", "", 56, -0.03, 0.03), "Electron_dxy")
+    h_fil_eldz = df_eldz.Histo1D(("h_eldz", "", 56, -0.03, 0.03), "Electron_dz")
+
+    #6th filter: Muon track
+    mu_sip3d = "sqrt(Muon_dxy*Muon_dxy + Muon_dz*Muon_dz)/sqrt(Muon_dxyErr*Muon_dxyErr+ Muon_dzErr*Muon_dzErr)"
+    df_mutrack = df.Define("Muon_sip3d", mu_sip3d)
+    h_unfil_musip3d = df_mutrack.Histo1D(("h_musip3d", "Muon_sip3d", 56, -0.5, 5),
+                                          "Muon_sip3d")
+    h_unfil_mudxy = df_mutrack.Histo1D(("h_mudxy", "Muon_dxy", 56, -0.03, 0.03),
+                                        "Muon_dxy")
+    h_unfil_mudz = df_mutrack.Histo1D(("h_mudz", "Muon_dz", 56, -0.03, 0.03), "Muon_dz")
+
+    df_musip3d = df_mutrack.Filter("All(Muon_sip3d<4)", "Musip3d cut")
+    df_mudxy = df_mutrack.Filter("All(abs(Muon_dxy)<0.5)", "Mudxy cut")
+    df_mudz = df_mutrack.Filter("All(abs(Muon_dz)<1.0)","Mudz cut")
+    h_fil_musip3d = df_musip3d.Histo1D(("h_musip3d", "", 56, -0.5, 5), "Muon_sip3d")
+    h_fil_mudxy = df_mudxy.Histo1D(("h_mudxy", "", 56, -0.03, 0.03), "Muon_dxy")
+    h_fil_mudz = df_mudz.Histo1D(("h_mudz", "", 56, -0.03, 0.03), "Muon_dz")
+
+    #Update the lists previously created and create a Report list to print afterwards
+    list_h_unfil.extend([h_unfil_eleta, h_unfil_mueta, 
+                        h_unfil_eldr, h_unfil_mudr,
+                        h_unfil_elpt, h_unfil_mupt,
+                        h_unfil_eliso3, h_unfil_muiso4,
+                        h_unfil_elsip3d, h_unfil_eldxy, h_unfil_eldz,
+                        h_unfil_musip3d, h_unfil_mudxy, h_unfil_mudz])
+    list_h_fil.extend([h_fil_eleta, h_fil_mueta, 
+                      h_fil_eldr, h_fil_mudr,
+                      h_fil_elpt, h_fil_mupt,
+                      h_fil_eliso3, h_fil_muiso4,
+                      h_fil_elsip3d, h_fil_eldxy, h_fil_eldz,
+                      h_fil_musip3d, h_fil_mudxy, h_fil_mudz])
+    list_report.extend([df_eleta.Report(), df_mueta.Report(),
+                        df_eldr.Report() , df_mudr.Report(), df_pt.Report(), 
+                        df_eliso.Report(), df_muiso.Report(),
+                        df_elsip3d.Report(), df_eldxy.Report(), df_eldz.Report(),
+                        df_musip3d.Report(), df_mudxy.Report(), df_mudz.Report()])   
     return list_h_unfil, list_h_fil, list_report 
 
-def good_events(df):
+def good_events(df_2el2mu):
     """Selection of 2electrons and 2 muons
     that pass the cuts used in the 2012 CERN article
     """
-    #selection of 2 of more electrons and muons, request good isolation
-    df_2el2mu = df.Filter("nElectron>=2 && nMuon>=2",
-                         "Only events with two or more Electrons and Muons")
+    # selection of 2 of more electrons and muons, request good isolation
+
     df_iso = df_2el2mu.Filter("All(abs(Electron_pfRelIso03_all)<0.40) &&"
                               "All(abs(Muon_pfRelIso04_all)<0.40)",
                               "Require good isolation")
@@ -179,14 +245,14 @@ def good_events(df):
                                      "Muon track close to primary vertex")
     df_2p2n = df_mu_track.Filter("Sum(Electron_charge) == 0 && Sum(Muon_charge) == 0",
                                  "Two opposite charged electron and muon pairs")
-    return df_2p2n
+    return df_2p2n.Report()
 
-def standard_retrieve(h_unfil_std, h_fil_std, rep_std):
+def standard_retrieve(h_unfil_std, h_fil_std, rep_std, dr_rep_std):
     """If the code is in only standard mode, here the event loop will be triggered
     """
     list_huf_data = []
     list_hf_data = []
-    list_cut = ["Eta","Pt"]
+    list_cut = ["Eta", "Dr", "Pt", "Isolation", "Electron track", "Muon track"]
     for h_uf, h_f in zip(h_unfil_std, h_fil_std):
         h_unfil_data = h_uf.GetValue()
         h_fil_data = h_f.GetValue()
@@ -195,10 +261,21 @@ def standard_retrieve(h_unfil_std, h_fil_std, rep_std):
 
     #Plot filtered and unfiltered data for the Eta cut
     filtered_plot(list_huf_data[:2], list_hf_data[:2], list_cut[0])
+    #Plot filtered and unfiltered data for the Dr cut
+    filtered_plot(list_huf_data[2:4], list_hf_data[2:4], list_cut[1])
     #Plot filtered and unfiltered data for the Pt cut
-    filtered_plot(list_huf_data[2:], list_hf_data[2:], list_cut[1])
+    filtered_plot(list_huf_data[4:6], list_hf_data[4:6], list_cut[2])
+    #Plot filtered and unfiltered data for the Isolation cut
+    filtered_plot(list_huf_data[6:8], list_hf_data[6:8], list_cut[3])
+    #Plot filtered and unfiltered data for the Electron track
+    filtered_plot(list_huf_data[8:11], list_hf_data[8:11], list_cut[4])
+    #Plot filtered and unfiltered data for the Muon track
+    filtered_plot(list_huf_data[11:], list_hf_data[11:], list_cut[5])
+
+    logging.info(f"{len(rep_std)+3} is the number of df requested")
 
     [rep.Print() for rep in rep_std]
+    # dr_rep_std.Print()
 
 
 def preliminar_plot(df, branch_histo, histo_data):
@@ -331,19 +408,19 @@ if __name__ == '__main__':
     
     if perform_std: 
         #Standard analysis
-        h_unfiltered, h_filtered, rep = standard_request(df_sig, df_bkg, df_data)
+        h_unfiltered, h_filtered, rep, dr_rep = standard_request(df_sig, df_bkg, df_data)
 
         if args.both:
             #The preliminary requests have already been done.
             #Let's go to the retrieving part
 
             preliminar_retrieve(df_prel, branches_prel, histo_prel)
-            standard_retrieve(h_unfiltered, h_filtered, rep)
+            standard_retrieve(h_unfiltered, h_filtered, rep, dr_rep)
         else:
-            standard_retrieve(h_unfiltered, h_filtered, rep)
+            standard_retrieve(h_unfiltered, h_filtered, rep, dr_rep)
             logging.info("You have chosen to perform only standard analysis")
     else:
         pass
     stop = time.time()
-    logging.info(f'elapsed time: {stop - start}\n')
+    logging.info(f'elapsed time using signal: {stop - start}\n')
 
