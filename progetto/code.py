@@ -18,7 +18,19 @@ _description = 'The program will perform standard analysis if no option is given
 ROOT.gInterpreter.ProcessLine('#include "library.h"')
 
 # Enable multi-threading
-# ROOT.ROOT.EnableImplicitMT()
+# ROOT.ROOT.EnableImplicitMT(4)
+
+#Imput links to signal, background and data samples
+#Signal of Higgs -> 4 leptons
+link_sig = "root://eospublic.cern.ch//eos/root-eos/cms_opendata_2012_nanoaod/SMHiggsToZZTo4L.root"
+#Background of ZZ -> 4 leptons
+link_bkg = "root://eospublic.cern.ch//eos/root-eos/cms_opendata_2012_nanoaod/ZZTo2e2mu.root"
+#CMS data tacken in 2012 (11.6 fb^(-1) integrated luminosity)
+link_data = ROOT.std.vector("string")(2)
+link_data[0] = "root://eospublic.cern.ch//eos/root-eos/cms_opendata_2012_nanoaod/Run2012B_DoubleMuParked.root"
+link_data[1] = "root://eospublic.cern.ch//eos/root-eos/cms_opendata_2012_nanoaod/Run2012C_DoubleMuParked.root"
+#Dict of link 
+dataset_link = {"signal": link_sig, "background": link_bkg, "data": link_data}
 
 def style(h, mode):
     """Set the basic style of a given histogram depending on which mode is required
@@ -27,27 +39,80 @@ def style(h, mode):
     h.SetLineStyle(1)
     h.SetLineWidth(1)
 
-    if mode == 'u':
+    #empty histogram
+    if mode == 'e':
         h.SetLineColor(ROOT.kRed)
 
+    #full histogram
     elif mode == 'f':
         h.SetFillStyle(1001)
         h.SetFillColor(ROOT.kAzure)
 
+    #mark histogram
+    elif mode == 'm':
+        h.SetMarkerStyle(20)
+        h.SetMarkerSize(1.0)
+        h.SetMarkerColor(ROOT.kBlack)
+        h.SetLineColor(ROOT.kBlack)
+
     return h
 
+def snapshot(df, filename, branches_list):
+    """Make a snapshot of df and selected branches to local filename.
+    """
+    snapshotOptions = ROOT.RDF.RSnapshotOptions()
+    snapshotOptions.fLazy = True
+    # branchList = ROOT.vector('string')()
+    # for branch in branches_list:
+    #     branchList.push_back(branch)
+    df_out = df.Snapshot("Events", filename, "", snapshotOptions)
+    return df_out
 
-def preliminar_request(df_s, df_b, df_d):
+def df_prefilter(df_key):
+    """In this code we will consider only events with 2 or more
+    electrons and muons
+    """
+    df_net = ROOT.RDataFrame("Events", dataset_link.get(df_key))
+    df_2e2m = df_net.Filter("nElectron>=2 && nMuon>=2",
+                            "Events with at least two Electrons and Muons")
+    # e = df_2e2m.Count()
+    # print(f"number of entries that has passed the filter:{e.GetValue()}")
+    return df_2e2m
+
+def access_df(df_key, branches_list, local_flag, mode):
+    """Access given dataset from appropriate location. Download to local
+    file if needed.
+    """
+    if local_flag:
+        filename = f"{df_key}_{mode}.root"
+        if os.path.isfile(filename):
+            df_local = ROOT.RDataFrame("Events", filename)
+            local_branches = df_local.GetColumnNames()
+            if set(branches_list) <= set(local_branches):
+                df_out = df_local
+            else:
+                df_2e2m = df_prefilter(df_key)
+                df_out = snapshot(df_2e2m, filename, branches_list)
+        else:
+            df_2e2m = df_prefilter(df_key)
+            df_out = snapshot(df_2e2m, filename, branches_list)
+    else:
+        df_out = df_prefilter(df_key)
+    return df_out
+
+def preliminar_request(flag):
     """First look at the chosen input file:
     this function is meant to explore only first hand characteristics of events
     and by default it will show three variables that are stored per component
     """
-    dict_df = {'signal':df_s, 'bakground':df_b, 'data':df_d}   
     key_df = input('Insert the data frame you want to look at first '
-                         f'choosing from this list:\n{dict_df.keys()}\n')
+                         f'choosing from this list:\n{dataset_link.keys()}\n')
+
     try:
-        df_In = dict_df.get(key_df)
-        list_branches = df_In.GetColumnNames()
+        # df_In = dict_df.get(key_df)
+        #In this way nothing is saved locally but the list of chosen columns can be shown
+        df = access_df(key_df, [""], False, 'p')
+        list_branches = df.GetColumnNames()
 
         # decide which variables to look first
         dictOfBranches = {i:list_branches[i] for i in range (0, len(list_branches))}
@@ -56,18 +121,26 @@ def preliminar_request(df_s, df_b, df_d):
         
         #control input and retrieve the required branches
         list_str = list_In.split(" ")
-
         b_In = []
-        h_In = []
-        for i in list_str and i < 32:
-            if i.isdigit():
+        for i in list_str:
+            if i.isdigit() and int(i) < 32:
                 current_branch = dictOfBranches[int(i)]
                 b_In.append(current_branch)
-                current_histo = df_In.Histo1D(current_branch)
-                h_In.append(current_histo)
             else:
                 logging.warning(f'Error! {i} is an invalid key!')
 
+        logging.info(f'These are the branches you chose: {b_In}')
+
+        #Require the chosen df and request the histos
+        b_In.extend(["PV_x", "PV_y", "PV_z", "Muon_dxy", "Muon_dz", 
+                    "Electron_dxy", "Electron_dz"])
+        unique_b_In = list(set(b_In))  
+        df_In = access_df(key_df, unique_b_In, flag, 'p')
+        h_In = []
+
+        for branch in unique_b_In:
+                current_histo = df_In.Histo1D(branch)
+                h_In.append(current_histo)
         #3D reconstruction of some fundamental variables
         pv_3d = df_In.Define("PV_3d","sqrt(PV_x*PV_x + PV_y*PV_y + PV_z*PV_z)")
         mu_3d = df_In.Define("Muon_3d","sqrt(Muon_dxy*Muon_dxy + Muon_dz*Muon_dz)")
@@ -79,37 +152,60 @@ def preliminar_request(df_s, df_b, df_d):
         h_el_3d = el_3d.Histo1D("El_3d")
 
         #Update of branches and histogram lists
-        b_In.extend(['PV_3d', 'Muon_3d', 'El_3d'])
+        unique_b_In.extend(['PV_3d', 'Muon_3d', 'El_3d'])
         h_In.extend([h_pv_3d, h_mu_3d, h_el_3d])
-
-        logging.info(f'These are the branches you chose: {b_In}')
-
     except KeyError as e:
         print(f'Cannot read the given key!\n{e}')
         sys.exit(1)
-    return key_df, b_In, h_In
+    return key_df, unique_b_In, h_In
 
-def preliminar_retrieve(h_prel, b_prel, df_prel):
+def preliminar_retrieve(df_prel, b_prel, h_prel):
     """Retrieve and plot histos previously requested
     """
     #Trigger event loop and plot
-    for hist, branch in zip(histo_prel, branches_prel):
+    for branch, hist in zip(b_prel, h_prel):
         h = hist.GetValue()
-        preliminar_plot(h, branch, df_prel)
+        preliminar_plot(df_prel, branch, h)
 
-def standard_request(df_s, df_b, df_d):
+def standard_request(flag):
     """All the necessary requests for the standard analysis will be prepared:
     """
-    #Two filters will be applied but not shown to reduce the number of processed data
-    df_2e2m = df_s.Filter("nElectron>=2 && nMuon>=2",
-                         "Only events with two or more Electrons and Muons")
+    branches_std = ["Electron_eta", "Muon_eta", "Electron_phi", "Muon_phi", "Electron_pt",
+                    "Muon_pt", "Electron_pfRelIso03_all", "Muon_pfRelIso04_all",
+                    "Electron_dxy", "Electron_dz", "Electron_dxyErr", "Electron_dzErr",
+                    "Muon_dxy", "Muon_dz", "Muon_dxyErr", "Muon_dzErr",
+                    "Electron_charge", "Muon_charge", "Electron_mass", "Muon_mass"]
+    
+    df_s = access_df("signal", branches_std, flag, 'std')
+    df_b = access_df("background", branches_std, flag, 'std')
+    df_d = access_df("data", branches_std, flag, 'std')
 
     #Request filtered and unfiltered data
-    list_h_unfil, list_h_fil, list_rep = show_cut(df_2e2m)
-    dr_report = good_events(df_2e2m)
-    return list_h_unfil, list_h_fil, list_rep, dr_report
+    list_h_unfil, list_h_fil, list_rep_filters = show_cut(df_b)
 
-def show_cut(df):
+    #Weights
+    luminosity = 11580.0  # Integrated luminosity of the data samples
+    xsec_sig = 0.0065  # ZZ->2el2mu: Standard Model cross-section
+    nevt_sig = 299973.0  # ZZ->2el2mu: Number of simulated events
+    scale_ZZTo4l = 1.386  # ZZ->4l: Scale factor for ZZ to four leptons    
+    xsec_bkg = 0.18  # ZZ->2el2mu: Standard Model cross-section
+    nevt_bkg = 1497445.0  # ZZ->2el2mu: Number of simulated events 
+    weight_sig = luminosity * xsec_sig / nevt_sig
+    weight_bkg = luminosity * xsec_bkg * scale_ZZTo4l / nevt_bkg
+    weight_data = 1.0   
+
+    #Request all the necessary to reconstruct the Higgs mass
+    h_signal, report_sig = reco_higgs(df_s, weight_sig)
+    h_bkg, report_bkg = reco_higgs(df_b, weight_bkg)
+    h_data,report_data = reco_higgs(df_d, weight_data)
+    
+    list_higgs = [h_signal, h_bkg, h_data]
+    # list_higgs = [h_signal, h_bkg]
+    list_rep_higgs = [report_sig, report_bkg, report_data]
+    # list_rep_higgs = [report_sig, report_bkg]
+    return list_h_unfil, list_h_fil, list_rep_filters, list_higgs, list_rep_higgs
+
+def show_cut(df_2e2m):
     """Comparison between unfiltered and filtered data considering the main cuts
     used in the analysis published on CERN Open Data
     """
@@ -120,16 +216,16 @@ def show_cut(df):
     list_report = []
 
     #1st filter:Eta cut
-    h_unfil_eleta = df.Histo1D(("h_Eleta", "Electron_eta", 56, -2.6, 2.6), "Electron_eta")
-    h_unfil_mueta = df.Histo1D(("h_Mueta", "Muon_eta", 56, -2.6, 2.6), "Muon_eta") 
+    h_unfil_eleta = df_2e2m.Histo1D(("h_Eleta", "Electron_eta", 56, -2.6, 2.6), "Electron_eta")
+    h_unfil_mueta = df_2e2m.Histo1D(("h_Mueta", "Muon_eta", 56, -2.6, 2.6), "Muon_eta") 
     
-    df_eleta = df.Filter("All(abs(Electron_eta)<2.5)", "Eleta cut")
-    df_mueta = df.Filter("All(abs(Muon_eta)<2.4)", "Mueta cut")
+    df_eleta = df_2e2m.Filter("All(abs(Electron_eta)<2.5)", "Eleta cut")
+    df_mueta = df_2e2m.Filter("All(abs(Muon_eta)<2.4)", "Mueta cut")
     h_fil_eleta = df_eleta.Histo1D(("h_Eleta","", 56, -2.6, 2.6), "Electron_eta")
     h_fil_mueta = df_mueta.Histo1D(("h_Mueta","", 56, -2.6, 2.6), "Muon_eta")
 
     #2nd filter:Dr cut
-    df_dr = df.Define("Electron_dr",
+    df_dr = df_2e2m.Define("Electron_dr",
                              "dr_def(Electron_eta, Electron_phi)").Define("Muon_dr",
                              "dr_def(Muon_eta, Muon_phi)")
     h_unfil_eldr = df_dr.Histo1D(("h_eldr","Electron_dr", 56, -0.5, 6), "Electron_dr")
@@ -141,25 +237,25 @@ def show_cut(df):
     h_fil_mudr = df_mudr.Histo1D(("h_mudr","Muon_dr", 56, -0.5, 6), "Muon_dr")
 
     #3rd filter:Pt cut
-    h_unfil_elpt = df.Histo1D(("h_Elpt", "Electron_pt", 56, -0.5, 120), "Electron_pt")
-    h_unfil_mupt = df.Histo1D(("h_Mupt", "Muon_pt", 56, -0.5, 120), "Muon_pt")
+    h_unfil_elpt = df_2e2m.Histo1D(("h_Elpt", "Electron_pt", 56, -0.5, 120), "Electron_pt")
+    h_unfil_mupt = df_2e2m.Histo1D(("h_Mupt", "Muon_pt", 56, -0.5, 120), "Muon_pt")
 
-    df_pt = df.Filter("pt_cut(Muon_pt, Electron_pt)", "Pt cuts")
+    df_pt = df_2e2m.Filter("pt_cut(Muon_pt, Electron_pt)", "Pt cuts")
     h_fil_elpt = df_pt.Histo1D(("h_Elpt", "", 56, -0.5, 120), "Electron_pt")
     h_fil_mupt = df_pt.Histo1D(("h_Mupt", "", 56, -0.5, 120), "Muon_pt")
 
     #4th filter: Good isolation
-    h_unfil_eliso3 = df.Histo1D(("h_eliso3","Electron_Iso3", 400, -1020, 50), "Electron_pfRelIso03_all")
-    h_unfil_muiso4 = df.Histo1D(("h_muiso4","Muon_Iso4", 400, -1020, 50), "Muon_pfRelIso04_all")
+    h_unfil_eliso3 = df_2e2m.Histo1D(("h_eliso3","Electron_Iso3", 400, -1020, 50), "Electron_pfRelIso03_all")
+    h_unfil_muiso4 = df_2e2m.Histo1D(("h_muiso4","Muon_Iso4", 400, -1020, 50), "Muon_pfRelIso04_all")
 
-    df_eliso = df.Filter("All(abs(Electron_pfRelIso03_all)<0.40)", "ElIso03 cut")
-    df_muiso = df.Filter("All(abs(Muon_pfRelIso04_all)<0.40)", "MuIso04 cut")   
+    df_eliso = df_2e2m.Filter("All(abs(Electron_pfRelIso03_all)<0.40)", "ElIso03 cut")
+    df_muiso = df_2e2m.Filter("All(abs(Muon_pfRelIso04_all)<0.40)", "MuIso04 cut")   
     h_fil_eliso3 = df_eliso.Histo1D(("h_eliso3","", 400, -1020, 50), "Electron_pfRelIso03_all")
     h_fil_muiso4 = df_muiso.Histo1D(("h_muiso4","", 400, -1020, 50), "Muon_pfRelIso04_all")
 
     #5th filter: Electron track
     el_sip3d = "sqrt(Electron_dxy*Electron_dxy + Electron_dz*Electron_dz)/sqrt(Electron_dxyErr*Electron_dxyErr+ Electron_dzErr*Electron_dzErr)"
-    df_eltrack = df.Define("Electron_sip3d", el_sip3d)
+    df_eltrack = df_2e2m.Define("Electron_sip3d", el_sip3d)
     h_unfil_elsip3d = df_eltrack.Histo1D(("h_elsip3d", "Electron_sip3d", 56, -0.5, 5),
                                           "Electron_sip3d")
     h_unfil_eldxy = df_eltrack.Histo1D(("h_eldxy", "Electron_dxy", 56, -0.03, 0.03),
@@ -176,7 +272,7 @@ def show_cut(df):
 
     #6th filter: Muon track
     mu_sip3d = "sqrt(Muon_dxy*Muon_dxy + Muon_dz*Muon_dz)/sqrt(Muon_dxyErr*Muon_dxyErr+ Muon_dzErr*Muon_dzErr)"
-    df_mutrack = df.Define("Muon_sip3d", mu_sip3d)
+    df_mutrack = df_2e2m.Define("Muon_sip3d", mu_sip3d)
     h_unfil_musip3d = df_mutrack.Histo1D(("h_musip3d", "Muon_sip3d", 56, -0.5, 5),
                                           "Muon_sip3d")
     h_unfil_mudxy = df_mutrack.Histo1D(("h_mudxy", "Muon_dxy", 56, -0.03, 0.03),
@@ -210,46 +306,68 @@ def show_cut(df):
                         df_musip3d.Report(), df_mudxy.Report(), df_mudz.Report()])   
     return list_h_unfil, list_h_fil, list_report 
 
-def good_events(df_2el2mu):
+def good_events(df_2e2m):
     """Selection of 2electrons and 2 muons
     that pass the cuts used in the 2012 CERN article
     """
-    # selection of 2 of more electrons and muons, request good isolation
-
-    df_iso = df_2el2mu.Filter("All(abs(Electron_pfRelIso03_all)<0.40) &&"
+    #angular cuts
+    df_eta = df_2e2m.Filter("All(abs(Electron_eta)<2.5) && All(abs(Muon_eta)<2.4)",
+                           "Eta_cuts")
+    #transvers momenta cuts
+    df_pt = df_eta.Filter("pt_cut(Muon_pt, Electron_pt)", "Pt cuts")
+    df_dr = df_pt.Filter("dr_cut(Muon_eta, Muon_phi, Electron_eta, Electron_phi)",
+                           "Dr_cuts")
+    #Request good isolation
+    df_iso = df_dr.Filter("All(abs(Electron_pfRelIso03_all)<0.40) &&"
                               "All(abs(Muon_pfRelIso04_all)<0.40)",
                               "Require good isolation")
 
-    #angular cuts
-    df_eta = df_iso.Filter("All(abs(Electron_eta)<2.5) && All(abs(Muon_eta)<2.4)",
-                           "Eta_cuts")
-    df_dr = df_eta.Filter("dr_cut(Muon_eta, Muon_phi, Electron_eta, Electron_phi)",
-                           "Dr_cuts")
 
-    #transvers momenta cuts
-    df_pt = df_dr.Filter("pt_cut(Muon_pt, Electron_pt)", "Pt cuts")
                            
     #Reconstruction and filter of Muon and Electron tracks
     el_ip3d = "sqrt(Electron_dxy*Electron_dxy + Electron_dz*Electron_dz)"
-    mu_ip3d = "sqrt(Muon_dxy*Muon_dxy + Muon_dz*Muon_dz)"
-    df_el_ip3d = df_pt.Define("Electron_ip3d", el_ip3d).Define("Muon_ip3d", mu_ip3d)
+    df_el_ip3d = df_iso.Define("Electron_ip3d", el_ip3d)
     el_sip3d = "Electron_ip3d/sqrt(Electron_dxyErr*Electron_dxyErr+ Electron_dzErr*Electron_dzErr)"
-    mu_sip3d = "Muon_ip3d/sqrt(Muon_dxyErr*Muon_dxyErr + Muon_dzErr*Muon_dzErr)"
-    df_el_sip3d = df_el_ip3d.Define("Electron_sip3d", el_sip3d).Define("Muon_sip3d", mu_sip3d)
+    df_el_sip3d = df_el_ip3d.Define("Electron_sip3d", el_sip3d)
     df_el_track = df_el_sip3d.Filter("All(Electron_sip3d<4) &&"
                                      " All(abs(Electron_dxy)<0.5) && "
                                      " All(abs(Electron_dz)<1.0)",
                                      "Electron track close to primary vertex")
-    df_mu_track = df_el_track.Filter("All(Muon_sip3d<4) && All(abs(Muon_dxy)<0.5) &&"
+    
+    mu_ip3d = "sqrt(Muon_dxy*Muon_dxy + Muon_dz*Muon_dz)"
+    df_mu_ip3d = df_el_track.Define("Muon_ip3d", mu_ip3d)
+    mu_sip3d = "Muon_ip3d/sqrt(Muon_dxyErr*Muon_dxyErr + Muon_dzErr*Muon_dzErr)"
+    df_mu_sip3d = df_mu_ip3d.Define("Muon_sip3d", mu_sip3d)
+    df_mu_track = df_mu_sip3d.Filter("All(Muon_sip3d<4) && All(abs(Muon_dxy)<0.5) &&"
                                      "All(abs(Muon_dz)<1.0)",
                                      "Muon track close to primary vertex")
     df_2p2n = df_mu_track.Filter("Sum(Electron_charge) == 0 && Sum(Muon_charge) == 0",
                                  "Two opposite charged electron and muon pairs")
-    return df_2p2n.Report()
+    return df_2p2n, df_2p2n.Report()
 
-def standard_retrieve(h_unfil_std, h_fil_std, rep_std, dr_rep_std):
+def reco_higgs(df, weight):
+    """Recontruction of the Higgs mass
+    """
+    #Selection of only the potential good events 
+    df_base, report_base = good_events(df)
+    
+    #Compute z masses from it
+    df_z_mass = df_base.Define("Z_mass", "z_mass(Electron_pt, Electron_eta, Electron_phi, Electron_mass, Muon_pt, Muon_eta, Muon_phi, Muon_mass)")
+    #Filter on z masses
+    df_z1 = df_z_mass.Filter("Z_mass[0] > 40 && Z_mass[0] < 120", "First candidate in [40, 120]") 
+    df_z2 = df_z1.Filter("Z_mass[1] > 12 && Z_mass[1] < 120", "Second candidate in [12, 120]")
+
+    #Reconstruct H mass
+    df_reco_h = df_z2.Define("H_mass", "h_mass(Electron_pt, Electron_eta, Electron_phi, Electron_mass, Muon_pt, Muon_eta, Muon_phi, Muon_mass)")
+
+    h_reco_h = df_reco_h.Define("weight", f"{weight}")\
+                        .Histo1D(("h_sig_2el2mu", "", 36, 70, 180), "H_mass", "weight")    
+    return h_reco_h, report_base
+
+def standard_retrieve(h_unfil_std, h_fil_std, rep_fil, h_higgs, rep_higgs):
     """If the code is in only standard mode, here the event loop will be triggered
     """
+    #series of instructions to retrieve and plot for the filter and unfilter histograms
     list_huf_data = []
     list_hf_data = []
     list_cut = ["Eta", "Dr", "Pt", "Isolation", "Electron track", "Muon track"]
@@ -271,12 +389,19 @@ def standard_retrieve(h_unfil_std, h_fil_std, rep_std, dr_rep_std):
     filtered_plot(list_huf_data[8:11], list_hf_data[8:11], list_cut[4])
     #Plot filtered and unfiltered data for the Muon track
     filtered_plot(list_huf_data[11:], list_hf_data[11:], list_cut[5])
+    
+    #Print, for now o screen, of the stats for each applied filter
+    # [rep.Print() for rep in rep_fil]
 
-    logging.info(f"{len(rep_std)+3} is the number of df requested")
-
-    [rep.Print() for rep in rep_std]
-    # dr_rep_std.Print()
-
+    #Series of instructions to retriev and plot higgs mass
+    list_higgs_data = []
+    
+    for h in h_higgs:
+        h_higgs_data = h.GetValue()
+        list_higgs_data.append(h_higgs_data)
+    
+    higgs_plot(list_higgs_data)
+    [(rep.Print(), print("")) for rep in rep_higgs]
 
 def preliminar_plot(df, branch_histo, histo_data):
     """For now it's just a simple plot of unprocessed data
@@ -331,7 +456,7 @@ def filtered_plot(list_histo_unfil, list_histo_fil, fil):
     for i in range(len(list_histo_fil)):
         
         canvas.cd()
-        h_ustyle = style(list_histo_unfil[i],'u')
+        h_ustyle = style(list_histo_unfil[i],'e')
         h_fstyle = style(list_histo_fil[i],'f')
         pad = ROOT.TPad(f"pad_{i}", f"pad_{i}", 0, i*delta_y, 1, (1+i)*delta_y)
         pad.Draw()
@@ -351,7 +476,44 @@ def filtered_plot(list_histo_unfil, list_histo_fil, fil):
 
     #Save plot
     canvas.SaveAs(f'{fil}.pdf')
+
+def higgs_plot(list_histo_higgs):
+    #Plot higgs mass
+    ROOT.gStyle.SetOptStat(0)
+    ROOT.gStyle.SetOptTitle(1)
+    ROOT.gStyle.SetTextFont(42)
+    canvas_s = ROOT.TCanvas("canvas_s","",800,700)
+    # canvas_b = ROOT.TCanvas("canvas_b","",800,700)
+    # canvas_d = ROOT.TCanvas("canvas_d","",800,700)
+
+    h_signal = style(list_histo_higgs[0], 'e')
+    h_background = style(list_histo_higgs[1], 'f')
+    h_data = style(list_histo_higgs[2], 'm')
+
+    canvas_s.cd()
+    h_background.Draw("HIST")
+    # canvas_d.cd()
+    h_signal.Draw("HIST SAME")
+    # canvas_b.cd()
+    h_data.Draw("PE1 SAME")
     
+    # print(list_histo_fil[0].GetXaxis.GetTitle())
+    # Add Legend
+    legend = ROOT.TLegend(0.7, 0.6, 0.85, 0.75)
+    legend.SetFillColor(0)
+    legend.SetBorderSize(1)
+    legend.SetTextSize(0.04)    
+    legend.AddEntry(list_histo_higgs[0], "Signal")
+    legend.AddEntry(list_histo_higgs[1], "Background")
+    legend.AddEntry(list_histo_higgs[2], "Data")
+    legend.Draw()
+
+    #Save plot
+    canvas_s.SaveAs('higgs_mass.pdf')
+    # canvas_b.SaveAs('higgs_mass_b.pdf')
+    # canvas_d.SaveAs('higgs_mass_d.pdf')
+
+
 if __name__ == '__main__':
 
     #monitor of the code run time
@@ -362,6 +524,10 @@ if __name__ == '__main__':
 
     #Possible options for different analysis
     parser = argparse.ArgumentParser(description=_description)
+    parser.add_argument('-l', '--local',
+                        help='perform analysis on local dataframe,'
+                        ' download of the request data if not present',
+                        action="store_true")
     group = parser.add_mutually_exclusive_group()
     group.add_argument('-p', '--preliminar',
                         help='perform only preliminar analysis',
@@ -371,28 +537,10 @@ if __name__ == '__main__':
                         action="store_true")
     args = parser.parse_args()
 
-    #Create the imput data frame which comprehends signal, background and
-    #data samples
-
-    #Signal of Higgs -> 4 leptons
-    df_sig = ROOT.RDataFrame("Events",
-                             "root://eospublic.cern.ch//eos/root-eos/cms_opendata_2012_nanoaod/SMHiggsToZZTo4L.root")
-    
-    #Background of ZZ -> 4 leptons
-    df_bkg = ROOT.RDataFrame("Events",
-                             "root://eospublic.cern.ch//eos/root-eos/cms_opendata_2012_nanoaod/ZZTo4e.root")
-
-    #CMS data tacken in 2012 (11.6 fb^(-1) integrated luminosity)
-    data_files = ROOT.std.vector("string")(2)
-    data_files[0] = "root://eospublic.cern.ch//eos/root-eos/cms_opendata_2012_nanoaod/Run2012B_DoubleMuParked.root"
-    data_files[1] = "root://eospublic.cern.ch//eos/root-eos/cms_opendata_2012_nanoaod/Run2012C_DoubleMuParked.root"
-
-    df_data = ROOT.RDataFrame("Events", data_files)
-
-    #Check the chosen argparse options    
+    #Check the chosen argparse options        
     if args.preliminar or args.both:   
         #In both cases we need the preliminary requests
-        df_prel, branches_prel, histo_prel = preliminar_request(df_sig, df_bkg, df_data)
+        df_prel, branches_prel, histo_prel = preliminar_request(args.local)
         
         if args.preliminar:
             #Standard analysis is excluded
@@ -408,19 +556,19 @@ if __name__ == '__main__':
     
     if perform_std: 
         #Standard analysis
-        h_unfiltered, h_filtered, rep, dr_rep = standard_request(df_sig, df_bkg, df_data)
+        h_unfiltered, h_filtered, rep, h_higgs, rep_higgs = standard_request(args.local)
 
         if args.both:
             #The preliminary requests have already been done.
             #Let's go to the retrieving part
 
             preliminar_retrieve(df_prel, branches_prel, histo_prel)
-            standard_retrieve(h_unfiltered, h_filtered, rep, dr_rep)
+            standard_retrieve(h_unfiltered, h_filtered, rep, h_higgs, rep_higgs)
         else:
-            standard_retrieve(h_unfiltered, h_filtered, rep, dr_rep)
+            standard_retrieve(h_unfiltered, h_filtered, rep, h_higgs, rep_higgs)
             logging.info("You have chosen to perform only standard analysis")
     else:
         pass
     stop = time.time()
     logging.info(f'elapsed time using signal: {stop - start}\n')
-
+    
