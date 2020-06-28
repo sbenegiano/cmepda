@@ -1,10 +1,16 @@
-import argparse
 import os
+import argparse
 import sys
 import ROOT
 import logging
 import time
-import numpy
+import numpy as np
+from sklearn.preprocessing import StandardScaler
+from sklearn.utils import shuffle
+from collections import OrderedDict
+# import keras
+# from keras.models import Sequentials
+# from keras.layers import Dense
 
 #Necessary option in order for argparse to function, if not present ROOT will 
 #prevail over argparse when option are passed from command line
@@ -32,28 +38,31 @@ link_data[1] = "root://eospublic.cern.ch//eos/root-eos/cms_opendata_2012_nanoaod
 #Dict of link 
 dataset_link = {"signal": link_sig, "background": link_bkg, "data": link_data}
 
-def style(h, mode):
+def style(h, mode, Rcolor):
     """Set the basic style of a given histogram depending on which mode is required
     """
+    ROOT.gStyle.SetOptStat(0)
+    ROOT.gStyle.SetOptTitle(1)
+    ROOT.gStyle.SetTextFont(42)
     h.SetStats(0)
     h.SetLineStyle(1)
     h.SetLineWidth(1)
 
     #empty histogram
     if mode == 'e':
-        h.SetLineColor(ROOT.kRed)
+        h.SetLineColor(Rcolor)
 
     #full histogram
     elif mode == 'f':
         h.SetFillStyle(1001)
-        h.SetFillColor(ROOT.kAzure)
+        h.SetFillColor(Rcolor)
 
     #mark histogram
     elif mode == 'm':
         h.SetMarkerStyle(20)
         h.SetMarkerSize(1.0)
-        h.SetMarkerColor(ROOT.kBlack)
-        h.SetLineColor(ROOT.kBlack)
+        h.SetMarkerColor(Rcolor)
+        h.SetLineColor(Rcolor)
 
     return h
 
@@ -62,9 +71,10 @@ def snapshot(df, filename, branches_list):
     """
     snapshotOptions = ROOT.RDF.RSnapshotOptions()
     snapshotOptions.fLazy = True
-    # branchList = ROOT.vector('string')()
+    # columns = ROOT.vector('string')()
     # for branch in branches_list:
-    #     branchList.push_back(branch)
+    #     columns.push_back(branch)
+    # df_out = df.Snapshot("Events", filename, columns, snapshotOptions)
     df_out = df.Snapshot("Events", filename, "", snapshotOptions)
     return df_out
 
@@ -89,6 +99,8 @@ def access_df(df_key, branches_list, local_flag, mode):
             df_local = ROOT.RDataFrame("Events", filename)
             local_branches = df_local.GetColumnNames()
             if set(branches_list) <= set(local_branches):
+                #local df are already prefiltered since they have been downloaded
+                #with the df_prefilter function
                 df_out = df_local
             else:
                 df_2e2m = df_prefilter(df_key)
@@ -181,7 +193,11 @@ def standard_request(flag):
     df_d = access_df("data", branches_std, flag, 'std')
 
     #Request filtered and unfiltered data
-    list_h_unfil, list_h_fil, list_rep_filters = show_cut(df_b)
+    dict_filter = {'sig':{}, 'bkg':{}}
+    # list_, list_h_fil, list_rep_filters = show_cut(df_b)
+    dict_filter['sig'] = show_cut(df_s)
+    dict_filter['bkg'] = show_cut(df_b)
+    df_train, ml_var = ml_request(df_s, df_b)
 
     #Weights
     luminosity = 11580.0  # Integrated luminosity of the data samples
@@ -200,10 +216,9 @@ def standard_request(flag):
     h_data,report_data = reco_higgs(df_d, weight_data)
     
     list_higgs = [h_signal, h_bkg, h_data]
-    # list_higgs = [h_signal, h_bkg]
     list_rep_higgs = [report_sig, report_bkg, report_data]
-    # list_rep_higgs = [report_sig, report_bkg]
-    return list_h_unfil, list_h_fil, list_rep_filters, list_higgs, list_rep_higgs
+
+    return dict_filter, list_higgs, list_rep_higgs, df_train, ml_var
 
 def show_cut(df_2e2m):
     """Comparison between unfiltered and filtered data considering the main cuts
@@ -303,8 +318,10 @@ def show_cut(df_2e2m):
                         df_eldr.Report() , df_mudr.Report(), df_pt.Report(), 
                         df_eliso.Report(), df_muiso.Report(),
                         df_elsip3d.Report(), df_eldxy.Report(), df_eldz.Report(),
-                        df_musip3d.Report(), df_mudxy.Report(), df_mudz.Report()])   
-    return list_h_unfil, list_h_fil, list_report 
+                        df_musip3d.Report(), df_mudxy.Report(), df_mudz.Report()])
+
+    output = {'h_unfil':list_h_unfil, 'h_fil':list_h_fil, 'rep':list_report}   
+    return output 
 
 def good_events(df_2e2m):
     """Selection of 2electrons and 2 muons
@@ -321,8 +338,6 @@ def good_events(df_2e2m):
     df_iso = df_dr.Filter("All(abs(Electron_pfRelIso03_all)<0.40) &&"
                               "All(abs(Muon_pfRelIso04_all)<0.40)",
                               "Require good isolation")
-
-
                            
     #Reconstruction and filter of Muon and Electron tracks
     el_ip3d = "sqrt(Electron_dxy*Electron_dxy + Electron_dz*Electron_dz)"
@@ -343,13 +358,13 @@ def good_events(df_2e2m):
                                      "Muon track close to primary vertex")
     df_2p2n = df_mu_track.Filter("Sum(Electron_charge) == 0 && Sum(Muon_charge) == 0",
                                  "Two opposite charged electron and muon pairs")
-    return df_2p2n, df_2p2n.Report()
+    return df_2p2n
 
 def reco_higgs(df, weight):
     """Recontruction of the Higgs mass
     """
     #Selection of only the potential good events 
-    df_base, report_base = good_events(df)
+    df_base = good_events(df)
     
     #Compute z masses from it
     df_z_mass = df_base.Define("Z_mass", "z_mass(Electron_pt, Electron_eta, Electron_phi, Electron_mass, Muon_pt, Muon_eta, Muon_phi, Muon_mass)")
@@ -361,39 +376,39 @@ def reco_higgs(df, weight):
     df_reco_h = df_z2.Define("H_mass", "h_mass(Electron_pt, Electron_eta, Electron_phi, Electron_mass, Muon_pt, Muon_eta, Muon_phi, Muon_mass)")
 
     h_reco_h = df_reco_h.Define("weight", f"{weight}")\
-                        .Histo1D(("h_sig_2el2mu", "", 36, 70, 180), "H_mass", "weight")    
-    return h_reco_h, report_base
+                        .Histo1D(("h_sig_2el2mu", "", 36, 70, 180), "H_mass", "weight")
+    report_higgs = df_reco_h.Report()    
+    return h_reco_h, report_higgs
 
-def standard_retrieve(h_unfil_std, h_fil_std, rep_fil, h_higgs, rep_higgs):
+def standard_retrieve (filters, h_higgs, rep_higgs):
     """If the code is in only standard mode, here the event loop will be triggered
     """
-    #series of instructions to retrieve and plot for the filter and unfilter histograms
-    list_huf_data = []
-    list_hf_data = []
-    list_cut = ["Eta", "Dr", "Pt", "Isolation", "Electron track", "Muon track"]
-    for h_uf, h_f in zip(h_unfil_std, h_fil_std):
-        h_unfil_data = h_uf.GetValue()
-        h_fil_data = h_f.GetValue()
-        list_huf_data.append(h_unfil_data)
-        list_hf_data.append(h_fil_data)
+    dict_cut = OrderedDict(Eta=(0, 2), Dr=(2, 4), Pt=(4, 6), Isolation=(6, 8), 
+                           Electron_track=(8, 11), Muon_track=(11, None))    
 
-    #Plot filtered and unfiltered data for the Eta cut
-    filtered_plot(list_huf_data[:2], list_hf_data[:2], list_cut[0])
-    #Plot filtered and unfiltered data for the Dr cut
-    filtered_plot(list_huf_data[2:4], list_hf_data[2:4], list_cut[1])
-    #Plot filtered and unfiltered data for the Pt cut
-    filtered_plot(list_huf_data[4:6], list_hf_data[4:6], list_cut[2])
-    #Plot filtered and unfiltered data for the Isolation cut
-    filtered_plot(list_huf_data[6:8], list_hf_data[6:8], list_cut[3])
-    #Plot filtered and unfiltered data for the Electron track
-    filtered_plot(list_huf_data[8:11], list_hf_data[8:11], list_cut[4])
-    #Plot filtered and unfiltered data for the Muon track
-    filtered_plot(list_huf_data[11:], list_hf_data[11:], list_cut[5])
+    # Take the same structure that will be filled with actual data
+    filters_data = {'sig':{'h_unfil':[], 'h_fil':[], 'rep':[]},
+                    'bkg':{'h_unfil':[], 'h_fil':[], 'rep':[]}}
+    # First step: iterate on (sig,(huf, hf, rep)) and (bkg,(huf, hf, rep))
+    for ch, ch_dict in filters.items():
+        # Second step: iterate on (hf, list), (huf, list), (rep, list)
+        for list_name, list_el in ch_dict.items():
+            #Third step: iterate on list elements and retrieve data
+            for elem in list_el:
+                filters_data[ch][list_name].append(elem.GetValue())
+    
+    for cut in dict_cut.keys():
+        start, end = dict_cut[cut]
+        h_uf_s = filters_data['sig']['h_unfil'][start:end]
+        h_f_s = filters_data['sig']['h_fil'][start:end]
+        h_uf_b = filters_data['bkg']['h_unfil'][start:end]
+        h_f_b = filters_data['bkg']['h_fil'][start:end]
+        filtered_plot(h_uf_s, h_uf_b, h_f_s, h_f_b, cut)
     
     #Print, for now o screen, of the stats for each applied filter
     # [rep.Print() for rep in rep_fil]
 
-    #Series of instructions to retriev and plot higgs mass
+    # #Series of instructions to retriev and plot higgs mass
     list_higgs_data = []
     
     for h in h_higgs:
@@ -437,11 +452,9 @@ def preliminar_plot(df, branch_histo, histo_data):
     filename = f'{branch_histo}_{df}.pdf'
     c_histo.SaveAs(filename)
 
-def filtered_plot(list_histo_unfil, list_histo_fil, fil):
+def filtered_plot(histo_unfil_s, histo_unfil_b, histo_fil_s, histo_fil_b, fil):
     """Plot of the filtered data versus the unprocessed ones"""
-    ROOT.gStyle.SetOptStat(0)
-    ROOT.gStyle.SetOptTitle(1)
-    ROOT.gStyle.SetTextFont(42)
+    # Add canvas
     canvas = ROOT.TCanvas("canvas","",800,700)
     canvas.cd()
 
@@ -451,23 +464,28 @@ def filtered_plot(list_histo_unfil, list_histo_fil, fil):
     legend.SetBorderSize(1)
     legend.SetTextSize(0.04)
 
-    delta_y = 1/len(list_histo_fil)
+    delta_y = 1/len(histo_fil_s)
 
-    for i in range(len(list_histo_fil)):
-        
+    for i in range(len(histo_fil_s)):
         canvas.cd()
-        h_ustyle = style(list_histo_unfil[i],'e')
-        h_fstyle = style(list_histo_fil[i],'f')
+        h_ustyle_s = style(histo_unfil_s[i],'e', ROOT.kRed)
+        h_fstyle_s = style(histo_fil_s[i],'f', ROOT.kRed)
+        h_ustyle_b = style(histo_unfil_b[i],'e', ROOT.kAzure)
+        h_fstyle_b = style(histo_fil_b[i],'f', ROOT.kAzure)
         pad = ROOT.TPad(f"pad_{i}", f"pad_{i}", 0, i*delta_y, 1, (1+i)*delta_y)
         pad.Draw()
         pad.cd()
-        h_ustyle.Draw()
-        h_fstyle.Draw("SAME")
+        h_ustyle_b.Draw()
+        h_fstyle_b.Draw("SAME")
+        h_ustyle_s.Draw("SAME")
+        h_fstyle_s.Draw("SAME")
     
     # print(list_histo_fil[0].GetXaxis.GetTitle())
     
-    legend.AddEntry(list_histo_unfil[0],"Unfilterd Data")
-    legend.AddEntry(list_histo_fil[0],"Filtered Data")
+    legend.AddEntry(histo_unfil_s[0],"Signal Unfilterd Data")
+    legend.AddEntry(histo_fil_s[0],"Signal Filtered Data")
+    legend.AddEntry(histo_unfil_b[0],"Background Unfilterd Data")
+    legend.AddEntry(histo_fil_b[0],"Background Filtered Data")
     legend.Draw()
 
     # pad1.SetBottomMargin(0)    
@@ -478,23 +496,18 @@ def filtered_plot(list_histo_unfil, list_histo_fil, fil):
     canvas.SaveAs(f'{fil}.pdf')
 
 def higgs_plot(list_histo_higgs):
-    #Plot higgs mass
-    ROOT.gStyle.SetOptStat(0)
-    ROOT.gStyle.SetOptTitle(1)
-    ROOT.gStyle.SetTextFont(42)
+    """Plot reconstructed Higgs mass for signal, background and data
+    """
+    # Add canvas
     canvas_s = ROOT.TCanvas("canvas_s","",800,700)
-    # canvas_b = ROOT.TCanvas("canvas_b","",800,700)
-    # canvas_d = ROOT.TCanvas("canvas_d","",800,700)
 
-    h_signal = style(list_histo_higgs[0], 'e')
-    h_background = style(list_histo_higgs[1], 'f')
-    h_data = style(list_histo_higgs[2], 'm')
+    h_signal = style(list_histo_higgs[0], 'e', ROOT.kRed)
+    h_background = style(list_histo_higgs[1], 'f', ROOT.kAzure)
+    h_data = style(list_histo_higgs[2], 'm', ROOT.kBlack)
 
     canvas_s.cd()
     h_background.Draw("HIST")
-    # canvas_d.cd()
     h_signal.Draw("HIST SAME")
-    # canvas_b.cd()
     h_data.Draw("PE1 SAME")
     
     # print(list_histo_fil[0].GetXaxis.GetTitle())
@@ -510,12 +523,82 @@ def higgs_plot(list_histo_higgs):
 
     #Save plot
     canvas_s.SaveAs('higgs_mass.pdf')
-    # canvas_b.SaveAs('higgs_mass_b.pdf')
-    # canvas_d.SaveAs('higgs_mass_d.pdf')
 
+def ml_request(df_sig, df_bkg):
+    """Prepare dataset to be readable by the machine learning  method
+    """
+    ml_var = ["Muon_pt_1", "Muon_pt_2", "Electron_pt_1", "Electron_pt_2",
+              "Muon_mass_1", "Muon_mass_2","Electron_mass_1", "Electron_mass_2", 
+              "Muon_eta_1", "Muon_eta_2", "Electron_eta_1", "Electron_eta_2",
+              "Muon_phi_1", "Muon_phi_2", "Electron_phi_1", "Electron_phi_2","Higgs_mass"]
+    snapshotOptions = ROOT.RDF.RSnapshotOptions()
+    snapshotOptions.fLazy = True
+    list_df_train = []
+    for df, df_key in [[df_sig, "signal"], [df_bkg, "background"]]:
+        logging.info(f"Book the training and testing events for {df_key}")
+        # Define the training variables
+        df = df.Define("Muon_pt_1", "Muon_pt[0]").Define("Muon_pt_2", "Muon_pt[1]")\
+               .Define("Muon_mass_1", "Muon_mass[0]").Define("Muon_mass_2", "Muon_mass[1]")\
+               .Define("Electron_mass_1", "Electron_mass[0]").Define("Electron_mass_2", "Electron_mass[1]")\
+               .Define("Electron_pt_1", "Electron_pt[0]").Define("Electron_pt_2", "Electron_pt[1]")\
+               .Define("Muon_eta_1","Muon_eta[0]").Define("Muon_eta_2","Muon_eta[1]")\
+               .Define("Electron_eta_1","Electron_eta[0]").Define("Electron_eta_2", "Electron_eta[1]")\
+               .Define("Muon_phi_1", "Muon_phi[0]").Define("Muon_phi_2","Muon_phi[1]")\
+               .Define("Electron_phi_1","Electron_phi[0]").Define("Electron_phi_2", "Electron_phi[1]")\
+               .Define("Higgs_mass","h_mass(Electron_pt, Electron_eta, Electron_phi, Electron_mass, Muon_pt, Muon_eta, Muon_phi, Muon_mass)")
+
+        # Split dataset by event number for training and testing
+        columns = ROOT.std.vector("string")()
+        for column in ml_var:
+            columns.push_back(column)
+        filename = f"train_{df_key}.root"
+        df_train = df.Snapshot("Events", filename, columns, snapshotOptions)
+        list_df_train.append(df_train)
+        
+    return list_df_train, ml_var
+
+def ml_training_retrieve(list_df, variables):
+    """Retrieving the dataset to train a machine learning model
+    """
+    # Read data from ROOT files, trigger event loop if not done before
+    print("Columns in data_sig: ", list_df[0].GetColumnNames())
+    data_sig = list_df[0].AsNumpy()
+    data_bkg = list_df[1].AsNumpy()
+    # Convert inputs to format readable by machine learning tools
+    # T is the transposed vector
+    x_sig = np.vstack([data_sig[var] for var in variables]).T
+    x_bkg = np.vstack([data_bkg[var] for var in variables]).T
+    # Reduce the number of entries to save on disk keeping the original proportion
+    entries_frac = 0.5
+    nEntries_s = round(entries_frac * x_sig.shape[0])
+    nEntries_b = round(entries_frac * x_bkg.shape[0])
+    x_sig_red = x_sig[:nEntries_s]
+    x_bkg_red = x_bkg[:nEntries_b]
+    x = np.vstack([x_sig_red, x_bkg_red])
+    # Create labels
+    num_sig = x_sig_red.shape[0]
+    num_bkg = x_bkg_red.shape[0]
+    y = np.hstack([np.ones(num_sig), np.zeros(num_bkg)])
+
+    #Scaling data (from here it's different from the ROOT tutorial)
+    sc = StandardScaler()
+    x_sc = sc.fit_transform(x)
+    x_sh, y_sh = shuffle(x_sc, y)
+    np.save("x_sh_unbalanced.npy", x_sh)
+    np.save("y_sh_unbalanced.npy", y_sh)
+    return x_sh, y_sh
+
+# def ml_training(list_df, variables):
+    
+    # # Load data
+    # x, y = ml_training_retrieve(list_df, variables)
+
+    # # Neural network
+    # model = Sequential()
+    # model.add(Dense(16, input_dim))
 
 if __name__ == '__main__':
-
+    
     #monitor of the code run time
     start = time.time()
 
@@ -556,19 +639,18 @@ if __name__ == '__main__':
     
     if perform_std: 
         #Standard analysis
-        h_unfiltered, h_filtered, rep, h_higgs, rep_higgs = standard_request(args.local)
-
+        dict_fil, h_higgs, rep_higgs, df_train, ml_var = standard_request(args.local)
         if args.both:
             #The preliminary requests have already been done.
             #Let's go to the retrieving part
-
             preliminar_retrieve(df_prel, branches_prel, histo_prel)
-            standard_retrieve(h_unfiltered, h_filtered, rep, h_higgs, rep_higgs)
+            ml_training_retrieve(df_train, ml_var)
+            standard_retrieve(dict_fil, h_higgs, rep_higgs)
         else:
-            standard_retrieve(h_unfiltered, h_filtered, rep, h_higgs, rep_higgs)
+            ml_training_retrieve(df_train, ml_var)
+            standard_retrieve(dict_fil, h_higgs, rep_higgs)
             logging.info("You have chosen to perform only standard analysis")
     else:
         pass
     stop = time.time()
     logging.info(f'elapsed time using signal: {stop - start}\n')
-    
