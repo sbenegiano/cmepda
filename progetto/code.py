@@ -4,21 +4,29 @@ import sys
 import ROOT
 import logging
 import time
-import numpy as np
-from sklearn.preprocessing import StandardScaler
-from sklearn.utils import shuffle
 from collections import OrderedDict
-# import keras
-# from keras.models import Sequentials
-# from keras.layers import Dense
+import numpy as np
+import matplotlib.pyplot as plt
+
+from sklearn.utils import shuffle
+from sklearn.preprocessing import StandardScaler
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import roc_curve, auc
+from sklearn.ensemble import RandomForestClassifier
+
+from tensorflow.keras.models import Sequential, load_model
+from tensorflow.keras.layers import Dense, Dropout
+from tensorflow.keras.regularizers import l2
+from tensorflow.keras.optimizers import SGD
+from tensorflow.keras.utils import to_categorical
 
 #Necessary option in order for argparse to function, if not present ROOT will 
 #prevail over argparse when option are passed from command line
-ROOT.PyConfig.IgnoreCommandLineOptions = True
+# ROOT.PyConfig.IgnoreCommandLineOptions = True
 
 logging.basicConfig(filename = "test.log", level = logging.DEBUG, 
-                    format = '%(asctime)s %(message)s')
-_description = 'The program will perform standard analysis if no option is given.'
+                    format = "%(asctime)s %(message)s")
+_description = "The program will perform standard analysis if no option is given."
 
 #Include cpp library for RDataFrame modules
 ROOT.gInterpreter.ProcessLine('#include "library.h"')
@@ -46,19 +54,20 @@ def style(h, mode, Rcolor):
     ROOT.gStyle.SetTextFont(42)
     h.SetStats(0)
     h.SetLineStyle(1)
-    h.SetLineWidth(1)
+    h.SetLineWidth(2)
+    h.GetYaxis().SetTitle("N_Events")
 
     #empty histogram
-    if mode == 'e':
+    if mode == "e":
         h.SetLineColor(Rcolor)
 
     #full histogram
-    elif mode == 'f':
+    elif mode == "f":
         h.SetFillStyle(1001)
         h.SetFillColor(Rcolor)
 
     #mark histogram
-    elif mode == 'm':
+    elif mode == "m":
         h.SetMarkerStyle(20)
         h.SetMarkerSize(1.0)
         h.SetMarkerColor(Rcolor)
@@ -66,12 +75,16 @@ def style(h, mode, Rcolor):
 
     return h
 
-def snapshot(df, filename, branches_list):
+# def snapshot(df, filename, branches_list):    
+def snapshot(df, filename):
     """Make a snapshot of df and selected branches to local filename.
     """
     snapshotOptions = ROOT.RDF.RSnapshotOptions()
     snapshotOptions.fLazy = True
-    # columns = ROOT.vector('string')()
+    # Former version selected only requested columns but there is a problem
+    # in ROOT with some columns name that raise an error.
+    # To avoid it, all columns are selected instead.
+    # columns = ROOT.vector("string")()
     # for branch in branches_list:
     #     columns.push_back(branch)
     # df_out = df.Snapshot("Events", filename, columns, snapshotOptions)
@@ -85,11 +98,9 @@ def df_prefilter(df_key):
     df_net = ROOT.RDataFrame("Events", dataset_link.get(df_key))
     df_2e2m = df_net.Filter("nElectron>=2 && nMuon>=2",
                             "Events with at least two Electrons and Muons")
-    # e = df_2e2m.Count()
-    # print(f"number of entries that has passed the filter:{e.GetValue()}")
     return df_2e2m
 
-def access_df(df_key, branches_list, local_flag, mode):
+def access_df(df_key, local_flag, mode):
     """Access given dataset from appropriate location. Download to local
     file if needed.
     """
@@ -97,17 +108,11 @@ def access_df(df_key, branches_list, local_flag, mode):
         filename = f"{df_key}_{mode}.root"
         if os.path.isfile(filename):
             df_local = ROOT.RDataFrame("Events", filename)
-            local_branches = df_local.GetColumnNames()
-            if set(branches_list) <= set(local_branches):
-                #local df are already prefiltered since they have been downloaded
-                #with the df_prefilter function
-                df_out = df_local
-            else:
-                df_2e2m = df_prefilter(df_key)
-                df_out = snapshot(df_2e2m, filename, branches_list)
+            # local_branches = df_local.GetColumnNames()
+            df_out = df_local
         else:
             df_2e2m = df_prefilter(df_key)
-            df_out = snapshot(df_2e2m, filename, branches_list)
+            df_out = snapshot(df_2e2m, filename)
     else:
         df_out = df_prefilter(df_key)
     return df_out
@@ -117,19 +122,18 @@ def preliminar_request(flag):
     this function is meant to explore only first hand characteristics of events
     and by default it will show three variables that are stored per component
     """
-    key_df = input('Insert the data frame you want to look at first '
-                         f'choosing from this list:\n{dataset_link.keys()}\n')
+    key_df = input("Insert the data frame you want to look at first "
+                         f"choosing from this list:\n{dataset_link.keys()}\n")
 
     try:
-        # df_In = dict_df.get(key_df)
         #In this way nothing is saved locally but the list of chosen columns can be shown
-        df = access_df(key_df, [""], False, 'p')
+        df = access_df(key_df, False, "p")
         list_branches = df.GetColumnNames()
 
         # decide which variables to look first
         dictOfBranches = {i:list_branches[i] for i in range (0, len(list_branches))}
-        list_In = input('Insert the variable numbers to look at, separated by a space'
-                        f'press return when you are done:\n{dictOfBranches}\n')
+        list_In = input("Insert the variable numbers to look at, separated by a space"
+                        f"press return when you are done:\n{dictOfBranches}\n")
         
         #control input and retrieve the required branches
         list_str = list_In.split(" ")
@@ -139,20 +143,20 @@ def preliminar_request(flag):
                 current_branch = dictOfBranches[int(i)]
                 b_In.append(current_branch)
             else:
-                logging.warning(f'Error! {i} is an invalid key!')
+                logging.warning(f"Error! {i} is an invalid key!")
 
-        logging.info(f'These are the branches you chose: {b_In}')
+        logging.info(f"These are the branches you chose: {b_In}")
 
         #Require the chosen df and request the histos
         b_In.extend(["PV_x", "PV_y", "PV_z", "Muon_dxy", "Muon_dz", 
                     "Electron_dxy", "Electron_dz"])
         unique_b_In = list(set(b_In))  
-        df_In = access_df(key_df, unique_b_In, flag, 'p')
+        df_In = access_df(key_df, flag, "p")
         h_In = []
 
         for branch in unique_b_In:
-                current_histo = df_In.Histo1D(branch)
-                h_In.append(current_histo)
+            current_histo = df_In.Histo1D(branch)
+            h_In.append(current_histo)
         #3D reconstruction of some fundamental variables
         pv_3d = df_In.Define("PV_3d","sqrt(PV_x*PV_x + PV_y*PV_y + PV_z*PV_z)")
         mu_3d = df_In.Define("Muon_3d","sqrt(Muon_dxy*Muon_dxy + Muon_dz*Muon_dz)")
@@ -164,10 +168,10 @@ def preliminar_request(flag):
         h_el_3d = el_3d.Histo1D("El_3d")
 
         #Update of branches and histogram lists
-        unique_b_In.extend(['PV_3d', 'Muon_3d', 'El_3d'])
+        unique_b_In.extend(["PV_3d", "Muon_3d", "El_3d"])
         h_In.extend([h_pv_3d, h_mu_3d, h_el_3d])
     except KeyError as e:
-        print(f'Cannot read the given key!\n{e}')
+        print(f"Cannot read the given key!\n{e}")
         sys.exit(1)
     return key_df, unique_b_In, h_In
 
@@ -182,22 +186,18 @@ def preliminar_retrieve(df_prel, b_prel, h_prel):
 def standard_request(flag):
     """All the necessary requests for the standard analysis will be prepared:
     """
-    branches_std = ["Electron_eta", "Muon_eta", "Electron_phi", "Muon_phi", "Electron_pt",
-                    "Muon_pt", "Electron_pfRelIso03_all", "Muon_pfRelIso04_all",
-                    "Electron_dxy", "Electron_dz", "Electron_dxyErr", "Electron_dzErr",
-                    "Muon_dxy", "Muon_dz", "Muon_dxyErr", "Muon_dzErr",
-                    "Electron_charge", "Muon_charge", "Electron_mass", "Muon_mass"]
     
-    df_s = access_df("signal", branches_std, flag, 'std')
-    df_b = access_df("background", branches_std, flag, 'std')
-    df_d = access_df("data", branches_std, flag, 'std')
+    df_s = access_df("signal", flag, "std")
+    df_b = access_df("background", flag, "std")
+    df_d = access_df("data", flag, "std")
 
     #Request filtered and unfiltered data
-    dict_filter = {'sig':{}, 'bkg':{}}
-    # list_, list_h_fil, list_rep_filters = show_cut(df_b)
-    dict_filter['sig'] = show_cut(df_s)
-    dict_filter['bkg'] = show_cut(df_b)
-    df_train, ml_var = ml_request(df_s, df_b)
+    dict_filter = {"sig":{}, "bkg":{}}
+    dict_filter["sig"] = show_cut(df_s)
+    dict_filter["bkg"] = show_cut(df_b)
+
+    # Request ml dataframe
+    df_ml = [df_s, df_b]
 
     #Weights
     luminosity = 11580.0  # Integrated luminosity of the data samples
@@ -218,7 +218,7 @@ def standard_request(flag):
     list_higgs = [h_signal, h_bkg, h_data]
     list_rep_higgs = [report_sig, report_bkg, report_data]
 
-    return dict_filter, list_higgs, list_rep_higgs, df_train, ml_var
+    return dict_filter, list_higgs, list_rep_higgs, df_ml
 
 def show_cut(df_2e2m):
     """Comparison between unfiltered and filtered data considering the main cuts
@@ -320,7 +320,7 @@ def show_cut(df_2e2m):
                         df_elsip3d.Report(), df_eldxy.Report(), df_eldz.Report(),
                         df_musip3d.Report(), df_mudxy.Report(), df_mudz.Report()])
 
-    output = {'h_unfil':list_h_unfil, 'h_fil':list_h_fil, 'rep':list_report}   
+    output = {"h_unfil":list_h_unfil, "h_fil":list_h_fil, "rep":list_report}   
     return output 
 
 def good_events(df_2e2m):
@@ -377,6 +377,8 @@ def reco_higgs(df, weight):
 
     h_reco_h = df_reco_h.Define("weight", f"{weight}")\
                         .Histo1D(("h_sig_2el2mu", "", 36, 70, 180), "H_mass", "weight")
+    #Filter on Higgs mass
+    df_reco_h = df_reco_h.Filter("H_mass > 110 && H_mass <140", "H_mass in [110, 140]")
     report_higgs = df_reco_h.Report()    
     return h_reco_h, report_higgs
 
@@ -387,8 +389,8 @@ def standard_retrieve (filters, h_higgs, rep_higgs):
                            Electron_track=(8, 11), Muon_track=(11, None))    
 
     # Take the same structure that will be filled with actual data
-    filters_data = {'sig':{'h_unfil':[], 'h_fil':[], 'rep':[]},
-                    'bkg':{'h_unfil':[], 'h_fil':[], 'rep':[]}}
+    filters_data = {"sig":{"h_unfil":[], "h_fil":[], "rep":[]},
+                    "bkg":{"h_unfil":[], "h_fil":[], "rep":[]}}
     # First step: iterate on (sig,(huf, hf, rep)) and (bkg,(huf, hf, rep))
     for ch, ch_dict in filters.items():
         # Second step: iterate on (hf, list), (huf, list), (rep, list)
@@ -399,10 +401,10 @@ def standard_retrieve (filters, h_higgs, rep_higgs):
     
     for cut in dict_cut.keys():
         start, end = dict_cut[cut]
-        h_uf_s = filters_data['sig']['h_unfil'][start:end]
-        h_f_s = filters_data['sig']['h_fil'][start:end]
-        h_uf_b = filters_data['bkg']['h_unfil'][start:end]
-        h_f_b = filters_data['bkg']['h_fil'][start:end]
+        h_uf_s = filters_data["sig"]["h_unfil"][start:end]
+        h_f_s = filters_data["sig"]["h_fil"][start:end]
+        h_uf_b = filters_data["bkg"]["h_unfil"][start:end]
+        h_f_b = filters_data["bkg"]["h_fil"][start:end]
         filtered_plot(h_uf_s, h_uf_b, h_f_s, h_f_b, cut)
     
     #Print, for now o screen, of the stats for each applied filter
@@ -414,12 +416,13 @@ def standard_retrieve (filters, h_higgs, rep_higgs):
     for h in h_higgs:
         h_higgs_data = h.GetValue()
         list_higgs_data.append(h_higgs_data)
-    
-    higgs_plot(list_higgs_data)
-    [(rep.Print(), print("")) for rep in rep_higgs]
+
+    # higgs_plot(list_higgs_data)
+    higgs_plot(list_higgs_data, rep_higgs)
+    # [(rep.Print(), print("")) for rep in rep_higgs]
 
 def preliminar_plot(df, branch_histo, histo_data):
-    """For now it's just a simple plot of unprocessed data
+    """For now it"s just a simple plot of unprocessed data
     """
     #General Canvas Settings
     ROOT.gStyle.SetOptStat(0)
@@ -431,8 +434,8 @@ def preliminar_plot(df, branch_histo, histo_data):
     #Set and Draw histogram for data points
     x_max = histo_data.GetXaxis().GetXmax()
     x_min = histo_data.GetXaxis().GetXmin()
-    logging.info(f'One day minumun and maximun of the {branch_histo}'
-                 f' will be useful...but it is NOT This day!{x_max,x_min}')
+    logging.info(f"One day minumun and maximun of the {branch_histo}"
+                 f" will be useful...but it is NOT This day!{x_max,x_min}")
     # histo_data.GetXaxis().SetRangeUser(x_min,x_max)
     
     histo_data.SetLineStyle(1)
@@ -441,15 +444,16 @@ def preliminar_plot(df, branch_histo, histo_data):
     histo_data.Draw()
 
     # Add Legend
-    legend = ROOT.TLegend(0.7, 0.6, 0.85, 0.75)
+    legend = ROOT.TLegend(0.7, 0.6, 0.85, 0.9)
     legend.SetFillColor(0)
-    legend.SetBorderSize(1)
+    # legend.SetBorderSize(1)
+    legend.SetLineWidth(0)
     legend.SetTextSize(0.04)
     legend.AddEntry(histo_data,df)
     legend.Draw()
 
     #Save plot
-    filename = f'{branch_histo}_{df}.pdf'
+    filename = f"{branch_histo}_{df}.pdf"
     c_histo.SaveAs(filename)
 
 def filtered_plot(histo_unfil_s, histo_unfil_b, histo_fil_s, histo_fil_b, fil):
@@ -459,19 +463,20 @@ def filtered_plot(histo_unfil_s, histo_unfil_b, histo_fil_s, histo_fil_b, fil):
     canvas.cd()
 
     # Add Legend
-    legend = ROOT.TLegend(0.7, 0.6, 0.85, 0.75)
+    legend = ROOT.TLegend(0.7, 0.6, 0.85, 0.9)
     legend.SetFillColor(0)
-    legend.SetBorderSize(1)
+    # legend.SetBorderSize(1)
+    legend.SetLineWidth(0)
     legend.SetTextSize(0.04)
 
     delta_y = 1/len(histo_fil_s)
 
     for i in range(len(histo_fil_s)):
         canvas.cd()
-        h_ustyle_s = style(histo_unfil_s[i],'e', ROOT.kRed)
-        h_fstyle_s = style(histo_fil_s[i],'f', ROOT.kRed)
-        h_ustyle_b = style(histo_unfil_b[i],'e', ROOT.kAzure)
-        h_fstyle_b = style(histo_fil_b[i],'f', ROOT.kAzure)
+        h_ustyle_s = style(histo_unfil_s[i],"e", ROOT.kRed)
+        h_fstyle_s = style(histo_fil_s[i],"f", ROOT.kRed)
+        h_ustyle_b = style(histo_unfil_b[i],"e", ROOT.kAzure)
+        h_fstyle_b = style(histo_fil_b[i],"f", ROOT.kAzure)
         pad = ROOT.TPad(f"pad_{i}", f"pad_{i}", 0, i*delta_y, 1, (1+i)*delta_y)
         pad.Draw()
         pad.cd()
@@ -488,22 +493,27 @@ def filtered_plot(histo_unfil_s, histo_unfil_b, histo_fil_s, histo_fil_b, fil):
     legend.AddEntry(histo_fil_b[0],"Background Filtered Data")
     legend.Draw()
 
+    # latex = ROOT.TLatex()
+    # latex.SetNDC()
+    # latex.SetTextSize(0.06)
+    # latex.DrawText (0.7 ,0.83 ,"ciao")
+
     # pad1.SetBottomMargin(0)    
     # pad2.SetTopMargin(0)
     # pad2.SetBottomMargin(0)
 
     #Save plot
-    canvas.SaveAs(f'{fil}.pdf')
+    canvas.SaveAs(f"{fil}.pdf")
 
-def higgs_plot(list_histo_higgs):
+def higgs_plot(list_histo_higgs, list_rep):
     """Plot reconstructed Higgs mass for signal, background and data
     """
     # Add canvas
     canvas_s = ROOT.TCanvas("canvas_s","",800,700)
 
-    h_signal = style(list_histo_higgs[0], 'e', ROOT.kRed)
-    h_background = style(list_histo_higgs[1], 'f', ROOT.kAzure)
-    h_data = style(list_histo_higgs[2], 'm', ROOT.kBlack)
+    h_signal = style(list_histo_higgs[0], "e", ROOT.kRed)
+    h_background = style(list_histo_higgs[1], "f", ROOT.kAzure)
+    h_data = style(list_histo_higgs[2], "m", ROOT.kBlack)
 
     canvas_s.cd()
     h_background.Draw("HIST")
@@ -512,62 +522,76 @@ def higgs_plot(list_histo_higgs):
     
     # print(list_histo_fil[0].GetXaxis.GetTitle())
     # Add Legend
-    legend = ROOT.TLegend(0.7, 0.6, 0.85, 0.75)
+    legend = ROOT.TLegend(0.7, 0.6, 0.85, 0.9)
     legend.SetFillColor(0)
-    legend.SetBorderSize(1)
+    # legend.SetBorderSize(1)
+    legend.SetLineWidth(0)
     legend.SetTextSize(0.04)    
     legend.AddEntry(list_histo_higgs[0], "Signal")
     legend.AddEntry(list_histo_higgs[1], "Background")
     legend.AddEntry(list_histo_higgs[2], "Data")
     legend.Draw()
 
-    #Save plot
-    canvas_s.SaveAs('higgs_mass.pdf')
+    [(rep.Print(), print("")) for rep in list_rep]
 
-def ml_request(df_sig, df_bkg):
+    # latex = ROOT.TLatex()
+    # latex.SetNDC()
+    # latex.SetTextSize(0.06)
+    # latex.DrawText (0.7 ,0.83 ,f"{list_rep[0].GetValue()}")
+
+    #Save plot
+    canvas_s.SaveAs("higgs_mass.pdf")
+
+def ml_request(ml_data):
     """Prepare dataset to be readable by the machine learning  method
     """
-    ml_var = ["Muon_pt_1", "Muon_pt_2", "Electron_pt_1", "Electron_pt_2",
-              "Muon_mass_1", "Muon_mass_2","Electron_mass_1", "Electron_mass_2", 
-              "Muon_eta_1", "Muon_eta_2", "Electron_eta_1", "Electron_eta_2",
-              "Muon_phi_1", "Muon_phi_2", "Electron_phi_1", "Electron_phi_2","Higgs_mass"]
-    snapshotOptions = ROOT.RDF.RSnapshotOptions()
-    snapshotOptions.fLazy = True
     list_df_train = []
-    for df, df_key in [[df_sig, "signal"], [df_bkg, "background"]]:
-        logging.info(f"Book the training and testing events for {df_key}")
-        # Define the training variables
-        df = df.Define("Muon_pt_1", "Muon_pt[0]").Define("Muon_pt_2", "Muon_pt[1]")\
-               .Define("Muon_mass_1", "Muon_mass[0]").Define("Muon_mass_2", "Muon_mass[1]")\
-               .Define("Electron_mass_1", "Electron_mass[0]").Define("Electron_mass_2", "Electron_mass[1]")\
-               .Define("Electron_pt_1", "Electron_pt[0]").Define("Electron_pt_2", "Electron_pt[1]")\
-               .Define("Muon_eta_1","Muon_eta[0]").Define("Muon_eta_2","Muon_eta[1]")\
-               .Define("Electron_eta_1","Electron_eta[0]").Define("Electron_eta_2", "Electron_eta[1]")\
-               .Define("Muon_phi_1", "Muon_phi[0]").Define("Muon_phi_2","Muon_phi[1]")\
-               .Define("Electron_phi_1","Electron_phi[0]").Define("Electron_phi_2", "Electron_phi[1]")\
-               .Define("Higgs_mass","h_mass(Electron_pt, Electron_eta, Electron_phi, Electron_mass, Muon_pt, Muon_eta, Muon_phi, Muon_mass)")
-
-        # Split dataset by event number for training and testing
+    if os.path.isfile("train_signal.root") and os.path.isfile("train_background.root"):
+        list_df_train.extend([ROOT.RDataFrame("Events", "train_signal.root"),
+                             ROOT.RDataFrame("Events", "train_background.root")])
+    else:
+        ml_var = ["Muon_pt_1", "Muon_pt_2", "Electron_pt_1", "Electron_pt_2",
+                "Muon_mass_1", "Muon_mass_2","Electron_mass_1", "Electron_mass_2", 
+                "Muon_eta_1", "Muon_eta_2", "Electron_eta_1", "Electron_eta_2",
+                "Muon_phi_1", "Muon_phi_2", "Electron_phi_1", "Electron_phi_2","H_mass"]
         columns = ROOT.std.vector("string")()
         for column in ml_var:
             columns.push_back(column)
-        filename = f"train_{df_key}.root"
-        df_train = df.Snapshot("Events", filename, columns, snapshotOptions)
-        list_df_train.append(df_train)
-        
-    return list_df_train, ml_var
 
-def ml_training_retrieve(list_df, variables):
-    """Retrieving the dataset to train a machine learning model
+        snapshotOptions = ROOT.RDF.RSnapshotOptions()
+        snapshotOptions.fLazy = True
+
+        for df, df_key in [[ml_data[0], "signal"], [ml_data[1], "background"]]:
+            logging.info(f"Book the training and testing events for {df_key}")
+            # Define the training variables
+            df = df.Define("Muon_pt_1", "Muon_pt[0]").Define("Muon_pt_2", "Muon_pt[1]")\
+                .Define("Muon_mass_1", "Muon_mass[0]").Define("Muon_mass_2", "Muon_mass[1]")\
+                .Define("Electron_mass_1", "Electron_mass[0]").Define("Electron_mass_2", "Electron_mass[1]")\
+                .Define("Electron_pt_1", "Electron_pt[0]").Define("Electron_pt_2", "Electron_pt[1]")\
+                .Define("Muon_eta_1","Muon_eta[0]").Define("Muon_eta_2","Muon_eta[1]")\
+                .Define("Electron_eta_1","Electron_eta[0]").Define("Electron_eta_2", "Electron_eta[1]")\
+                .Define("Muon_phi_1", "Muon_phi[0]").Define("Muon_phi_2","Muon_phi[1]")\
+                .Define("Electron_phi_1","Electron_phi[0]").Define("Electron_phi_2", "Electron_phi[1]")\
+                .Define("H_mass","h_mass(Electron_pt, Electron_eta, Electron_phi, Electron_mass, Muon_pt, Muon_eta, Muon_phi, Muon_mass)")
+
+            # Save ml training datasets to file
+            filename = f"train_{df_key}.root"
+            df_train = df.Snapshot("Events", filename, columns, snapshotOptions)
+            list_df_train.append(df_train)            
+
+    report_sig = list_df_train[0].Filter("H_mass > 110 && H_mass <140", "H_mass in [110, 140]").Report()
+    report_bkg = list_df_train[1].Filter("H_mass > 110 && H_mass <140", "H_mass in [110, 140]").Report()
+    list_df_train.extend([report_sig, report_bkg])
+    return list_df_train
+
+def ml_preprocessing(sig, bkg, branches):
+    """It prepares the arrays to be read by most ML tools.
+    the arrays are then saved in a .npy file
     """
-    # Read data from ROOT files, trigger event loop if not done before
-    print("Columns in data_sig: ", list_df[0].GetColumnNames())
-    data_sig = list_df[0].AsNumpy()
-    data_bkg = list_df[1].AsNumpy()
     # Convert inputs to format readable by machine learning tools
     # T is the transposed vector
-    x_sig = np.vstack([data_sig[var] for var in variables]).T
-    x_bkg = np.vstack([data_bkg[var] for var in variables]).T
+    x_sig = np.vstack([sig[var] for var in branches]).T
+    x_bkg = np.vstack([bkg[var] for var in branches]).T
     # Reduce the number of entries to save on disk keeping the original proportion
     entries_frac = 0.5
     nEntries_s = round(entries_frac * x_sig.shape[0])
@@ -579,57 +603,184 @@ def ml_training_retrieve(list_df, variables):
     num_sig = x_sig_red.shape[0]
     num_bkg = x_bkg_red.shape[0]
     y = np.hstack([np.ones(num_sig), np.zeros(num_bkg)])
-
-    #Scaling data (from here it's different from the ROOT tutorial)
+    # Scaling data 
     sc = StandardScaler()
     x_sc = sc.fit_transform(x)
     x_sh, y_sh = shuffle(x_sc, y)
     np.save("x_sh_unbalanced.npy", x_sh)
     np.save("y_sh_unbalanced.npy", y_sh)
-    return x_sh, y_sh
+    return (x_sh, y_sh)
 
-# def ml_training(list_df, variables):
+def keras_model(in_dim):
+    # Definition of a costumed keras model
+    model = Sequential()
+    model.add(Dense(24, input_dim=in_dim,
+                    activation="relu"))
+    model.add(Dense(48, activation="relu"))
+    model.add(Dense(24, activation="relu"))
+    model.add(Dropout(0.2))
+    model.add(Dense(2, activation="sigmoid"))
+    model.compile(loss="binary_crossentropy",
+                optimizer=SGD(lr=0.01),
+                metrics=["accuracy"])
+    return model
+
+def model_train(name, IN_DIM, X_train, X_val, y_train, y_val):
+    """Load the already trained model, if not present initialize and train 
+    the default model and return self
+    """
+    N_EPOCHS = 10
+    # Series of specific instruction to train a keras model 
+    if name == "k_model":
+        # Check saved model
+        if os.path.isdir(f"k_model_ep{N_EPOCHS}_nf{IN_DIM}") and\
+           os.path.isfile(f"k_history_ep{N_EPOCHS}_nf{IN_DIM}.npy"):
+           # Load saved model
+           k_model = load_model(f"k_model_ep{N_EPOCHS}_nf{IN_DIM}")
+           k_history = np.load(f"k_history_ep{N_EPOCHS}_nf{IN_DIM}.npy",
+                               allow_pickle="TRUE").item()
+        else:
+            # Train and save model to folder
+            # Keras needs categorical labels (means one column per class "0" and "1")
+            Y_train_k = to_categorical(y_train)
+            Y_val_k = to_categorical(y_val)
+            start = time.time()
+            k_model = keras_model(IN_DIM)
+            k_history = k_model.fit(X_train, Y_train_k,
+                                        validation_data = (X_val,Y_val_k), 
+                                        epochs=N_EPOCHS, batch_size=64)
+            k_model.save(f"k_model_ep{N_EPOCHS}_nf{IN_DIM}")
+            np.save(f"k_history_ep{N_EPOCHS}_nf{IN_DIM}.npy", k_history.history)
+            k_history = k_history.history
+            stop = time.time()
+            logging.info(f"Elapsed time training the net:{stop - start}")
+        return {"model":k_model, "history":k_history}
     
-    # # Load data
-    # x, y = ml_training_retrieve(list_df, variables)
+    elif name == "rf_model": #this may be a list
+        # Supervised transformation based on random forests
+        rf = RandomForestClassifier(max_depth=7, n_estimators=IN_DIM)
+        rf.fit(X_train, y_train)
+        return {"model":rf}
 
-    # # Neural network
-    # model = Sequential()
-    # model.add(Dense(16, input_dim))
-
-if __name__ == '__main__':
+def model_eval(name, model, X_test, y_test):
+    """Evaluate the performaces of the classifier
+    """
+    if name == "k_model":
+        # Return the probability to belong to a class (2D array) 
+        # Takes only the column of the "1" class (containing the probability)
+        y_pred = model.predict(X_test)[:, 1]
+    elif name == "rf_model":
+        y_pred = model.predict_proba(X_test)[:, 1]
     
-    #monitor of the code run time
+    # fpr_keras, tpr_keras, thresholds_keras = roc_curve(y_test, y_pred)
+    # auc_keras = auc(fpr_keras, tpr_keras)
+    # return {"fpr":fpr_keras, "tpr":tpr_keras, "auc":auc_keras}
+    
+    # Compute ROC curve and AUC
+    fpr, tpr, thresholds = roc_curve(y_test, y_pred)
+    auc_model = auc(fpr, tpr)
+    return {"fpr":fpr, "tpr":tpr, "auc":auc_model, "ths":thresholds}
+
+def ml_plot(models):
+    """All the models are plotted
+    """
+    # Plot the ROC curves
+    plt.figure(1)
+    plt.plot([0, 1], [1, 0], "k--")
+    plt.plot(0.7368, 1 - 0.0906, "kx", label="std filter only higgs mass")
+    plt.plot(0.25, 1 - 0.0103, "r*", label="std all filters + higgs mass")
+    for name in models.keys():
+        model = models[name]
+        plt.plot(model["tpr"], 1 - model["fpr"], label=f'{name} (area = {model["auc"]:.3f})')
+    plt.xlabel("Signal efficiency")
+    plt.ylabel("Background rejection")
+    plt.title("ROC curve")
+    plt.legend(loc="best")
+    plt.savefig("Roc_curve")
+    plt.show()
+
+    # Plot loss curve for keras model
+    plt.figure(2)
+    plt.plot(models["k_model"]["history"]["loss"]) 
+    plt.plot(models["k_model"]["history"]["val_loss"]) 
+    plt.title("Keras Model loss") 
+    plt.ylabel("Loss") 
+    plt.xlabel("Epoch") 
+    plt.legend(["Train", "Test"], loc="upper left") 
+    plt.savefig("loss_curve")
+    plt.show()
+
+def ml_training_retrieve(list_df):
+    """Retrieving the dataset to train a machine learning model
+    """
+    N_EVENTS = 80000
+    N_COLUMNS = 17
+    IN_DIM = 17
+    if os.path.isfile("x_sh_unbalanced.npy") and os.path.isfile("y_sh_unbalanced.npy"):
+        # From now on all variables >1D have capital letter
+        X_sh = np.load("x_sh_unbalanced.npy")
+        y_sh = np.load("y_sh_unbalanced.npy")
+    else:
+        # Read data from ROOT files, trigger event loop if not done before
+        list_branches = list_df[0].GetColumnNames()    
+        data_sig = list_df[0].AsNumpy()
+        data_bkg = list_df[1].AsNumpy()
+        # The arrays are now normalized and shuffled, and their file is saved
+        X_sh, y_sh = ml_preprocessing(data_sig, data_bkg, list_branches)
+    
+    # Selection of the events and variables, the sliced columns Must be of IN_DIM size
+    X_sh = X_sh[:N_EVENTS , :N_COLUMNS]
+    y_sh = y_sh[:N_EVENTS]
+    # Prepare train and test set, all models will need this
+    X_train, X_test, y_train, y_test = train_test_split(X_sh, y_sh, test_size = 0.1)
+       
+    #Dictionary of the used models
+    models_dict = {"k_model":{}, "rf_model":{}}
+    # Here the DNNs are trained, fitted and evaluated, they"ll be then ready to be plotted
+    for name in models_dict.keys():
+        models_dict[name] = model_train(name, IN_DIM, X_train, X_test, y_train, y_test)
+        model = models_dict[name]["model"]
+        eval_dict = model_eval(name, model, X_test, y_test)
+        models_dict[name].update(eval_dict)
+
+    ml_plot(models_dict)
+    list_df[2].Print()
+    list_df[3].Print()
+    return (list_df[2], list_df[3])
+
+if __name__ == "__main__":
+    
+    # Monitor of the code run time
     start = time.time()
 
-    #Set the standard mode of analysis
+    # Set the standard mode of analysis
     perform_std = True
 
-    #Possible options for different analysis
+    # Possible options for different analysis
     parser = argparse.ArgumentParser(description=_description)
-    parser.add_argument('-l', '--local',
-                        help='perform analysis on local dataframe,'
-                        ' download of the request data if not present',
+    parser.add_argument("-l", "--local",
+                        help="perform analysis on local dataframe,"
+                        " download of the request data if not present",
                         action="store_true")
     group = parser.add_mutually_exclusive_group()
-    group.add_argument('-p', '--preliminar',
-                        help='perform only preliminar analysis',
+    group.add_argument("-p", "--preliminar",
+                        help="perform only preliminar analysis",
                         action="store_true")
-    group.add_argument('-b', '--both',
-                        help='perform also preliminar analysis',
+    group.add_argument("-b", "--both",
+                        help="perform also preliminar analysis",
                         action="store_true")
     args = parser.parse_args()
 
-    #Check the chosen argparse options        
+    # Check the chosen argparse options        
     if args.preliminar or args.both:   
-        #In both cases we need the preliminary requests
+        # In both cases we need the preliminary requests
         df_prel, branches_prel, histo_prel = preliminar_request(args.local)
         
         if args.preliminar:
-            #Standard analysis is excluded
+            # Standard analysis is excluded
             perform_std = False
-            logging.info('You have disabled standard analysis')
-            #There are no other requests, event loop can be triggered
+            logging.info("You have disabled standard analysis")
+            # There are no other requests, event loop can be triggered
             preliminar_retrieve(df_prel, branches_prel, histo_prel)
         else:
             logging.info("It will pass to the requests for standard analysis")
@@ -638,19 +789,19 @@ if __name__ == '__main__':
         pass
     
     if perform_std: 
-        #Standard analysis
-        dict_fil, h_higgs, rep_higgs, df_train, ml_var = standard_request(args.local)
+        # Standard analysis
+        dict_fil, h_higgs, rep_higgs, df_ml = standard_request(args.local)
+        ml_req_df = ml_request(df_ml) 
         if args.both:
-            #The preliminary requests have already been done.
-            #Let's go to the retrieving part
+            # Preliminary requests done. Let's go to the retrieving part
             preliminar_retrieve(df_prel, branches_prel, histo_prel)
-            ml_training_retrieve(df_train, ml_var)
             standard_retrieve(dict_fil, h_higgs, rep_higgs)
+            ml_training_retrieve(ml_req_df)
         else:
-            ml_training_retrieve(df_train, ml_var)
             standard_retrieve(dict_fil, h_higgs, rep_higgs)
+            ml_training_retrieve(ml_req_df)            
             logging.info("You have chosen to perform only standard analysis")
     else:
         pass
     stop = time.time()
-    logging.info(f'elapsed time using signal: {stop - start}\n')
+    logging.info(f"elapsed time using signal: {stop - start}\n")
