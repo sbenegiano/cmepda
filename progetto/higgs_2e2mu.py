@@ -54,17 +54,19 @@ def style(h, mode, Rcolor):
     ROOT.gStyle.SetTextFont(42)
     h.SetStats(0)
     h.SetLineStyle(1)
-    h.SetLineWidth(2)
-    h.GetYaxis().SetTitle("N_Events")
+    h.SetLineWidth(1)
+    h.GetYaxis().SetTitle("Counts")
 
     #empty histogram
     if mode == "e":
         h.SetLineColor(Rcolor)
+        h.SetLineWidth(2)
 
     #full histogram
     elif mode == "f":
         h.SetFillStyle(1001)
         h.SetFillColor(Rcolor)
+        h.SetLineColor(ROOT.kBlack)
 
     #mark histogram
     elif mode == "m":
@@ -75,7 +77,6 @@ def style(h, mode, Rcolor):
 
     return h
 
-# def snapshot(df, filename, branches_list):    
 def snapshot(df, filename):
     """Make a snapshot of df and selected branches to local filename.
     """
@@ -183,18 +184,68 @@ def preliminar_retrieve(df_prel, b_prel, h_prel):
         h = hist.GetValue()
         preliminar_plot(df_prel, branch, h)
 
+def standard_define(df):
+    """It defines and adds to the current df
+    the variables that will be used for filter events in the standard analysis.
+    All the variables that are more significant for the analysis, such as Z, H
+    and his angular variables will be regrouped in a specific to make clearer the main
+    points of the workflow and to be more easily accessible from the ml routines.
+    """
+    el_sip3d = "Electron_ip3d/sqrt(Electron_dxyErr*Electron_dxyErr+ Electron_dzErr*Electron_dzErr)"
+    el_ip3d = "sqrt(Electron_dxy*Electron_dxy + Electron_dz*Electron_dz)"
+    mu_ip3d = "sqrt(Muon_dxy*Muon_dxy + Muon_dz*Muon_dz)"
+    mu_sip3d = "Muon_ip3d/sqrt(Muon_dxyErr*Muon_dxyErr + Muon_dzErr*Muon_dzErr)"
+
+    df = df.Define("Electron_ip3d", el_ip3d)\
+           .Define("Electron_sip3d", el_sip3d)\
+           .Define("Muon_ip3d", mu_ip3d)\
+           .Define("Muon_sip3d", mu_sip3d)
+
+    return df        
+
+def reco_define(df_2e2mu):
+    """It defines all the main variables, such as Z, H and its angular variables  
+    """
+    z_mass_reco = "z_mass(Electron_pt, Electron_eta, Electron_phi, Electron_mass,"\
+                         "Muon_pt, Muon_eta, Muon_phi, Muon_mass)"
+    h_mass_reco = "h_mass(Electron_pt, Electron_eta, Electron_phi, Electron_mass,"\
+                         "Muon_pt, Muon_eta, Muon_phi, Muon_mass)"
+    costheta_star_reco = "costheta_star(Electron_pt, Electron_eta, Electron_phi, Electron_mass,"\
+                         "Muon_pt, Muon_eta, Muon_phi, Muon_mass)"
+    phi_reco = "measure_phi(Electron_pt, Electron_eta, Electron_phi, Electron_mass, Electron_charge,"\
+                            "Muon_pt, Muon_eta, Muon_phi, Muon_mass, Muon_charge)[0]"
+    phi1_reco = "measure_phi(Electron_pt, Electron_eta, Electron_phi, Electron_mass, Electron_charge,"\
+                            "Muon_pt, Muon_eta, Muon_phi, Muon_mass, Muon_charge)[1]"
+    costheta1_reco = "costheta(Electron_pt, Electron_eta, Electron_phi, Electron_mass, Electron_charge,"\
+                              "Muon_pt, Muon_eta, Muon_phi, Muon_mass, Muon_charge)[0]"
+    costheta2_reco = "costheta(Electron_pt, Electron_eta, Electron_phi, Electron_mass, Electron_charge,"\
+                              "Muon_pt, Muon_eta, Muon_phi, Muon_mass, Muon_charge)[1]"
+
+    df_z_mass = df_2e2mu.Define("Z_mass", z_mass_reco)\
+                        .Define("H_mass", h_mass_reco)\
+                        .Define("CosTheta_star",costheta_star_reco)\
+                        .Define("Phi", phi_reco)\
+                        .Define("Phi1", phi1_reco)\
+                        .Define("CosTheta1", costheta1_reco)\
+                        .Define("CosTheta2", costheta2_reco)
+    return df_z_mass
+
 def standard_request(flag):
     """All the necessary requests for the standard analysis will be prepared:
-    """
-    
+    """ 
     df_s = access_df("signal", flag, "std")
     df_b = access_df("background", flag, "std")
     df_d = access_df("data", flag, "std")
 
+    df_s1 = standard_define(df_s)
+    df_b1 = standard_define(df_b)
+    df_d1 = standard_define(df_d)
+
+    start = time.time()
     #Request filtered and unfiltered data
-    dict_filter = {"sig":{}, "bkg":{}}
-    dict_filter["sig"] = show_cut(df_s)
-    dict_filter["bkg"] = show_cut(df_b)
+    dict_filter = {}
+    dict_filter["sig"] = show_cut(df_s1)
+    dict_filter["bkg"] = show_cut(df_b1)
 
     # Request ml dataframe
     df_ml = [df_s, df_b]
@@ -208,218 +259,194 @@ def standard_request(flag):
     nevt_bkg = 1497445.0  # ZZ->2el2mu: Number of simulated events 
     weight_sig = luminosity * xsec_sig / nevt_sig
     weight_bkg = luminosity * xsec_bkg * scale_ZZTo4l / nevt_bkg
-    weight_data = 1.0   
+    weight_data = weight_ang_data = 1.0
+
+    weight_ang_sig = 91/12065
+    weight_ang_bkg = 91/51237
 
     #Request all the necessary to reconstruct the Higgs mass
-    h_signal, report_sig = reco_higgs(df_s, weight_sig)
-    h_bkg, report_bkg = reco_higgs(df_b, weight_bkg)
-    h_data,report_data = reco_higgs(df_d, weight_data)
-    
-    list_higgs = [h_signal, h_bkg, h_data]
-    list_rep_higgs = [report_sig, report_bkg, report_data]
+    h_sig_higgs, report_sig, h_sig_ang = reco_higgs(df_s1, weight_sig, weight_ang_sig)
+    h_bkg_higgs, report_bkg, h_bkg_ang = reco_higgs(df_b1, weight_bkg, weight_ang_bkg)
+    h_data_higgs,report_data, h_data_ang = reco_higgs(df_d1, weight_data, weight_ang_data)
+    stop = time.time()
+    dict_angular = OrderedDict({"costheta_star":[], "costheta1":[], "costheta2":[],
+                                "phi":[], "phi1":[]})
+    for idx, h_list in enumerate(dict_angular.values()):
+        h_list.extend([h_sig_ang[idx], h_bkg_ang[idx], h_data_ang[idx]])
 
-    return dict_filter, list_higgs, list_rep_higgs, df_ml
+    list_higgs = [h_sig_higgs, h_bkg_higgs, h_data_higgs]
+    list_rep_higgs = [report_sig, report_bkg, report_data]
+    print("request time:", stop-start)
+
+    return dict_filter, list_higgs, list_rep_higgs, df_ml, dict_angular
 
 def show_cut(df_2e2m):
-    """Comparison between unfiltered and filtered data considering the main cuts
-    used in the analysis published on CERN Open Data
+    """Comparison between unfiltered and filtered data for each filter, 
+    considering the main cuts used in the analysis published on CERN Open Data.
     """
-    #Preparation of a list of filtered and unfiltered data to plot aferwards
-    #And of a list of reports for each filter
-    list_h_unfil = []
-    list_h_fil = []
-    list_report = []
+    #1st filter: Good isolation it's not symmetrical for electron and muon
+    h_unfil_eliso3 = df_2e2m.Histo1D(("h_eliso3", "", 56, -0.05, 1.2), "Electron_pfRelIso03_all")
+    h_unfil_muiso4 = df_2e2m.Histo1D(("h_muiso4", "", 56, -0.05, 1.2), "Muon_pfRelIso04_all")
 
-    #1st filter:Eta cut
-    h_unfil_eleta = df_2e2m.Histo1D(("h_Eleta", "Electron_eta", 56, -2.6, 2.6), "Electron_eta")
-    h_unfil_mueta = df_2e2m.Histo1D(("h_Mueta", "Muon_eta", 56, -2.6, 2.6), "Muon_eta") 
+    df_eliso3 = df_2e2m.Filter("All(abs(Electron_pfRelIso03_all)<0.40)", "ElIso03 cut")
+    h_fil_eliso3 = df_eliso3.Histo1D(("h_eliso3", "", 56, -0.05, 1.2), "Electron_pfRelIso03_all")
+    df_muiso4 = df_2e2m.Filter("All(abs(Muon_pfRelIso04_all)<0.40)", "MuIso04 cut")
+    h_fil_muiso4 = df_muiso4.Histo1D(("h_muiso4", "", 56, -0.05, 1.2), "Muon_pfRelIso04_all")
+
+    filter_dict = {"Isolation":[[h_unfil_eliso3, h_unfil_muiso4],
+                                [h_fil_eliso3, h_fil_muiso4],
+                                [df_eliso3.Report(), df_muiso4.Report()]], 
+                   "Eta":[[], [], []], "Dr":[[], [], []], "Pt":[[], [], []],
+                   "Electron_track":[[], [], []], "Muon_track":[[], [], []],
+                   "Z_mass":[[], [], []]}
     
-    df_eleta = df_2e2m.Filter("All(abs(Electron_eta)<2.5)", "Eleta cut")
-    df_mueta = df_2e2m.Filter("All(abs(Muon_eta)<2.4)", "Mueta cut")
-    h_fil_eleta = df_eleta.Histo1D(("h_Eleta","", 56, -2.6, 2.6), "Electron_eta")
-    h_fil_mueta = df_mueta.Histo1D(("h_Mueta","", 56, -2.6, 2.6), "Muon_eta")
-
-    #2nd filter:Dr cut
-    df_dr = df_2e2m.Define("Electron_dr",
-                             "dr_def(Electron_eta, Electron_phi)").Define("Muon_dr",
-                             "dr_def(Muon_eta, Muon_phi)")
-    h_unfil_eldr = df_dr.Histo1D(("h_eldr","Electron_dr", 56, -0.5, 6), "Electron_dr")
-    h_unfil_mudr = df_dr.Histo1D(("h_mudr","Muon_dr", 56, -0.5, 6), "Muon_dr")
-
-    df_eldr = df_dr.Filter("Electron_dr>=0.02","Eldr cut")
-    df_mudr = df_dr.Filter("Muon_dr>=0.02","Mudr cut")
-    h_fil_eldr = df_eldr.Histo1D(("h_eldr","Electron_dr", 56, -0.5, 6), "Electron_dr")
-    h_fil_mudr = df_mudr.Histo1D(("h_mudr","Muon_dr", 56, -0.5, 6), "Muon_dr")
-
-    #3rd filter:Pt cut
-    h_unfil_elpt = df_2e2m.Histo1D(("h_Elpt", "Electron_pt", 56, -0.5, 120), "Electron_pt")
-    h_unfil_mupt = df_2e2m.Histo1D(("h_Mupt", "Muon_pt", 56, -0.5, 120), "Muon_pt")
-
+    # Dataframe for filter in pt, it's symmetrical but involves mu and e at the same time
     df_pt = df_2e2m.Filter("pt_cut(Muon_pt, Electron_pt)", "Pt cuts")
-    h_fil_elpt = df_pt.Histo1D(("h_Elpt", "", 56, -0.5, 120), "Electron_pt")
-    h_fil_mupt = df_pt.Histo1D(("h_Mupt", "", 56, -0.5, 120), "Muon_pt")
+    
+    #Filters that either are simmetrical or don't involve mu and e at the same time
+    for part in ["Electron", "Muon"]:
+        #2nd filter:Eta cut    
+        h_unfil_eta = df_2e2m.Histo1D((f"h_{part}_eta", "", 56, -3, 3), f"{part}_eta")
+        df_eta = df_2e2m.Filter(f"All(abs({part}_eta)<2.5)", f"{part}_Eta cut")
+        h_fil_eta = df_eta.Histo1D((f"h_{part}", "", 56, -3, 3), f"{part}_eta")
+        filter_dict["Eta"][0].append(h_unfil_eta)
+        filter_dict["Eta"][1].append(h_fil_eta)
+        filter_dict["Eta"][2].append(df_eta.Report())
+        #3rd filter:Dr cut
+        df_dr = df_2e2m.Define(f"{part}_dr", f"dr_def({part}_eta, {part}_phi)")
+        h_unfil_dr = df_dr.Histo1D((f"h_{part}", "", 56, -0.5, 5.5), f"{part}_dr")
+        df_fil_dr = df_dr.Filter(f"{part}_dr>=0.02", f"{part}_Dr cut")
+        h_fil_dr = df_fil_dr.Histo1D((f"{part}", f"{part}_dr", 56, -0.5, 5.5), f"{part}_dr")
+        filter_dict["Dr"][0].append(h_unfil_dr)
+        filter_dict["Dr"][1].append(h_fil_dr)
+        filter_dict["Dr"][2].append(df_fil_dr.Report())
+        #4th filter:Pt cut
+        h_unfil_pt = df_2e2m.Histo1D((f"h_{part}pt", "", 56, -0.5, 120), f"{part}_pt")
+        h_fil_pt = df_pt.Histo1D((f"h_{part}_pt", "", 56, -0.5, 120), f"{part}_pt")
+        filter_dict["Pt"][0].append(h_unfil_pt)
+        filter_dict["Pt"][1].append(h_fil_pt)
+        filter_dict["Pt"][2].append(df_pt.Report())
+        #5th filter: Track
+        h_unfil_sip3d = df_2e2m.Histo1D((f"h_{part}sip3d", "", 56, -0.1, 3), f"{part}_sip3d")
+        h_unfil_dxy = df_2e2m.Histo1D((f"h_{part}_dxy", "", 56, -0.02, 0.02), f"{part}_dxy")
+        h_unfil_dz = df_2e2m.Histo1D((f"h_{part}_dz", "", 56, -0.02, 0.02), f"{part}_dz")
+        
+        df_sip3d = df_2e2m.Filter(f"All({part}_sip3d<4)", f"{part}_Sip3d cut")
+        h_fil_sip3d = df_sip3d.Histo1D((f"h_{part}_sip3d", "", 56, -0.1, 3), f"{part}_sip3d")
+        df_dxy = df_2e2m.Filter(f"All(abs({part}_dxy)<0.5)", f"{part}_Dxy cut")
+        h_fil_dxy = df_dxy.Histo1D((f"h_{part}_dxy", "", 56, -0.02, 0.02), f"{part}_dxy")
+        df_dz = df_2e2m.Filter(f"All(abs({part}_dz)<1.0)", f"{part}_Dz cut")
+        h_fil_dz = df_dz.Histo1D((f"h_{part}_dz", "", 56, -0.02, 0.02), f"{part}_dz")
+        filter_dict[f"{part}_track"][0].extend([h_unfil_sip3d, h_unfil_dxy, h_unfil_dz])
+        filter_dict[f"{part}_track"][1].extend([h_fil_sip3d, h_fil_dxy, h_fil_dz])
+        filter_dict[f"{part}_track"][2].extend([df_sip3d.Report(), df_dxy.Report(), df_dz.Report()])
 
-    #4th filter: Good isolation
-    h_unfil_eliso3 = df_2e2m.Histo1D(("h_eliso3","Electron_Iso3", 400, -1020, 50), "Electron_pfRelIso03_all")
-    h_unfil_muiso4 = df_2e2m.Histo1D(("h_muiso4","Muon_Iso4", 400, -1020, 50), "Muon_pfRelIso04_all")
-
-    df_eliso = df_2e2m.Filter("All(abs(Electron_pfRelIso03_all)<0.40)", "ElIso03 cut")
-    df_muiso = df_2e2m.Filter("All(abs(Muon_pfRelIso04_all)<0.40)", "MuIso04 cut")   
-    h_fil_eliso3 = df_eliso.Histo1D(("h_eliso3","", 400, -1020, 50), "Electron_pfRelIso03_all")
-    h_fil_muiso4 = df_muiso.Histo1D(("h_muiso4","", 400, -1020, 50), "Muon_pfRelIso04_all")
-
-    #5th filter: Electron track
-    el_sip3d = "sqrt(Electron_dxy*Electron_dxy + Electron_dz*Electron_dz)/sqrt(Electron_dxyErr*Electron_dxyErr+ Electron_dzErr*Electron_dzErr)"
-    df_eltrack = df_2e2m.Define("Electron_sip3d", el_sip3d)
-    h_unfil_elsip3d = df_eltrack.Histo1D(("h_elsip3d", "Electron_sip3d", 56, -0.5, 5),
-                                          "Electron_sip3d")
-    h_unfil_eldxy = df_eltrack.Histo1D(("h_eldxy", "Electron_dxy", 56, -0.03, 0.03),
-                                        "Electron_dxy")
-    h_unfil_eldz = df_eltrack.Histo1D(("h_eldz", "Electron_dz", 56, -0.03, 0.03),
-                                       "Electron_dz")
-
-    df_elsip3d = df_eltrack.Filter("All(Electron_sip3d<4)", "Elsip3d cut")
-    df_eldxy = df_eltrack.Filter("All(abs(Electron_dxy)<0.5)", "Eldxy cut")
-    df_eldz = df_eltrack.Filter(" All(abs(Electron_dz)<1.0)", "Eldz cut")
-    h_fil_elsip3d = df_elsip3d.Histo1D(("h_elsip3d", "", 56, -0.5, 5), "Electron_sip3d")
-    h_fil_eldxy = df_eldxy.Histo1D(("h_eldxy", "", 56, -0.03, 0.03), "Electron_dxy")
-    h_fil_eldz = df_eldz.Histo1D(("h_eldz", "", 56, -0.03, 0.03), "Electron_dz")
-
-    #6th filter: Muon track
-    mu_sip3d = "sqrt(Muon_dxy*Muon_dxy + Muon_dz*Muon_dz)/sqrt(Muon_dxyErr*Muon_dxyErr+ Muon_dzErr*Muon_dzErr)"
-    df_mutrack = df_2e2m.Define("Muon_sip3d", mu_sip3d)
-    h_unfil_musip3d = df_mutrack.Histo1D(("h_musip3d", "Muon_sip3d", 56, -0.5, 5),
-                                          "Muon_sip3d")
-    h_unfil_mudxy = df_mutrack.Histo1D(("h_mudxy", "Muon_dxy", 56, -0.03, 0.03),
-                                        "Muon_dxy")
-    h_unfil_mudz = df_mutrack.Histo1D(("h_mudz", "Muon_dz", 56, -0.03, 0.03), "Muon_dz")
-
-    df_musip3d = df_mutrack.Filter("All(Muon_sip3d<4)", "Musip3d cut")
-    df_mudxy = df_mutrack.Filter("All(abs(Muon_dxy)<0.5)", "Mudxy cut")
-    df_mudz = df_mutrack.Filter("All(abs(Muon_dz)<1.0)","Mudz cut")
-    h_fil_musip3d = df_musip3d.Histo1D(("h_musip3d", "", 56, -0.5, 5), "Muon_sip3d")
-    h_fil_mudxy = df_mudxy.Histo1D(("h_mudxy", "", 56, -0.03, 0.03), "Muon_dxy")
-    h_fil_mudz = df_mudz.Histo1D(("h_mudz", "", 56, -0.03, 0.03), "Muon_dz")
-
-    #Update the lists previously created and create a Report list to print afterwards
-    list_h_unfil.extend([h_unfil_eleta, h_unfil_mueta, 
-                        h_unfil_eldr, h_unfil_mudr,
-                        h_unfil_elpt, h_unfil_mupt,
-                        h_unfil_eliso3, h_unfil_muiso4,
-                        h_unfil_elsip3d, h_unfil_eldxy, h_unfil_eldz,
-                        h_unfil_musip3d, h_unfil_mudxy, h_unfil_mudz])
-    list_h_fil.extend([h_fil_eleta, h_fil_mueta, 
-                      h_fil_eldr, h_fil_mudr,
-                      h_fil_elpt, h_fil_mupt,
-                      h_fil_eliso3, h_fil_muiso4,
-                      h_fil_elsip3d, h_fil_eldxy, h_fil_eldz,
-                      h_fil_musip3d, h_fil_mudxy, h_fil_mudz])
-    list_report.extend([df_eleta.Report(), df_mueta.Report(),
-                        df_eldr.Report() , df_mudr.Report(), df_pt.Report(), 
-                        df_eliso.Report(), df_muiso.Report(),
-                        df_elsip3d.Report(), df_eldxy.Report(), df_eldz.Report(),
-                        df_musip3d.Report(), df_mudxy.Report(), df_mudz.Report()])
-
-    output = {"h_unfil":list_h_unfil, "h_fil":list_h_fil, "rep":list_report}   
-    return output 
+    # Compute z masses and filter
+    df_z_mass = df_2e2m.Define("Z_mass", "z_mass(Electron_pt, Electron_eta, Electron_phi, Electron_mass,"\
+                               "Muon_pt, Muon_eta, Muon_phi, Muon_mass)")
+    h_unfil_z = df_z_mass.Histo1D(("h_Z_mass", "", 56, -5, 140), "Z_mass")
+    # 6th filter: z masses
+    df_z = df_z_mass.Filter("Z_mass[0] > 40 && Z_mass[0] < 120 && Z_mass[1] > 12 && Z_mass[1] < 120",
+                            "First candidate in [40, 120] and Second candidate in [12, 120]")
+    h_fil_z = df_z.Histo1D(("h_Z_mass", "", 56, -5, 140), "Z_mass")
+    filter_dict["Z_mass"][0].append(h_unfil_z)
+    filter_dict["Z_mass"][1].append(h_fil_z)
+    filter_dict["Z_mass"][2].append(df_z.Report())
+    return filter_dict
 
 def good_events(df_2e2m):
-    """Selection of 2electrons and 2 muons
-    that pass the cuts used in the 2012 CERN article
+    """Selection of 2electrons and 2 muons that pass the cuts used in the 2012 CERN article
     """
     #angular cuts
     df_eta = df_2e2m.Filter("All(abs(Electron_eta)<2.5) && All(abs(Muon_eta)<2.4)",
-                           "Eta_cuts")
+                            "Eta_cuts")
     #transvers momenta cuts
-    df_pt = df_eta.Filter("pt_cut(Muon_pt, Electron_pt)", "Pt cuts")
+    df_pt = df_eta.Filter("pt_cut(Muon_pt, Electron_pt)",
+                          "Pt cuts")
     df_dr = df_pt.Filter("dr_cut(Muon_eta, Muon_phi, Electron_eta, Electron_phi)",
-                           "Dr_cuts")
+                         "Dr_cuts")
     #Request good isolation
     df_iso = df_dr.Filter("All(abs(Electron_pfRelIso03_all)<0.40) &&"
-                              "All(abs(Muon_pfRelIso04_all)<0.40)",
-                              "Require good isolation")
-                           
-    #Reconstruction and filter of Muon and Electron tracks
-    el_ip3d = "sqrt(Electron_dxy*Electron_dxy + Electron_dz*Electron_dz)"
-    df_el_ip3d = df_iso.Define("Electron_ip3d", el_ip3d)
-    el_sip3d = "Electron_ip3d/sqrt(Electron_dxyErr*Electron_dxyErr+ Electron_dzErr*Electron_dzErr)"
-    df_el_sip3d = df_el_ip3d.Define("Electron_sip3d", el_sip3d)
-    df_el_track = df_el_sip3d.Filter("All(Electron_sip3d<4) &&"
-                                     " All(abs(Electron_dxy)<0.5) && "
-                                     " All(abs(Electron_dz)<1.0)",
-                                     "Electron track close to primary vertex")
-    
-    mu_ip3d = "sqrt(Muon_dxy*Muon_dxy + Muon_dz*Muon_dz)"
-    df_mu_ip3d = df_el_track.Define("Muon_ip3d", mu_ip3d)
-    mu_sip3d = "Muon_ip3d/sqrt(Muon_dxyErr*Muon_dxyErr + Muon_dzErr*Muon_dzErr)"
-    df_mu_sip3d = df_mu_ip3d.Define("Muon_sip3d", mu_sip3d)
-    df_mu_track = df_mu_sip3d.Filter("All(Muon_sip3d<4) && All(abs(Muon_dxy)<0.5) &&"
+                          "All(abs(Muon_pfRelIso04_all)<0.40)",
+                          "Require good isolation")
+    #Filter of Muon and Electron tracks
+    df_el_track = df_iso.Filter("All(Electron_sip3d<4) &&"
+                                " All(abs(Electron_dxy)<0.5) && "
+                                " All(abs(Electron_dz)<1.0)",
+                                "Electron track close to primary vertex")
+    df_mu_track = df_el_track.Filter("All(Muon_sip3d<4) && All(abs(Muon_dxy)<0.5) &&"    
                                      "All(abs(Muon_dz)<1.0)",
                                      "Muon track close to primary vertex")
     df_2p2n = df_mu_track.Filter("Sum(Electron_charge) == 0 && Sum(Muon_charge) == 0",
                                  "Two opposite charged electron and muon pairs")
+
     return df_2p2n
 
-def reco_higgs(df, weight):
+def reco_higgs(df, weight, weight_ang):
     """Recontruction of the Higgs mass
     """
     #Selection of only the potential good events 
     df_base = good_events(df)
     
-    #Compute z masses from it
-    df_z_mass = df_base.Define("Z_mass", "z_mass(Electron_pt, Electron_eta, Electron_phi, Electron_mass, Muon_pt, Muon_eta, Muon_phi, Muon_mass)")
+    #Compute z and H masses from it
+    df_z_mass = reco_define(df_base)
     #Filter on z masses
     df_z1 = df_z_mass.Filter("Z_mass[0] > 40 && Z_mass[0] < 120", "First candidate in [40, 120]") 
     df_z2 = df_z1.Filter("Z_mass[1] > 12 && Z_mass[1] < 120", "Second candidate in [12, 120]")
 
-    #Reconstruct H mass
-    df_reco_h = df_z2.Define("H_mass", "h_mass(Electron_pt, Electron_eta, Electron_phi, Electron_mass, Muon_pt, Muon_eta, Muon_phi, Muon_mass)")
-
-    h_reco_h = df_reco_h.Define("weight", f"{weight}")\
-                        .Histo1D(("h_sig_2el2mu", "", 36, 70, 180), "H_mass", "weight")
+    #Define weights
+    df_reco = df_z2.Define("weight", f"{weight}").Define("weight_ang", f"{weight_ang}")
+    h_reco_h = df_reco.Histo1D(("h_sig_2el2mu", "", 36, 70, 180), "H_mass", "weight")
     #Filter on Higgs mass
-    df_reco_h = df_reco_h.Filter("H_mass > 110 && H_mass <140", "H_mass in [110, 140]")
-    report_higgs = df_reco_h.Report()    
-    return h_reco_h, report_higgs
+    df_reco_h = df_reco
+    # df_reco_h = df_reco.Filter("H_mass > 110 && H_mass <140", "H_mass in [110, 140]")
 
-def standard_retrieve (filters, h_higgs, rep_higgs):
+    #Reconstructed angular variables
+    h_costheta_star = df_reco_h.Histo1D(("h_costheta_star", "CosTheta_star", 56, -1, 1), "CosTheta_star", "weight_ang")
+    h_costheta1 = df_reco_h.Histo1D(("h_costheta1", "CosTheta1", 56, -1, 1), "CosTheta1", "weight_ang")
+    h_costheta2 = df_reco_h.Histo1D(("h_costheta2", "CosTheta2", 56, -1, 1), "CosTheta2", "weight_ang")
+    h_phi = df_reco_h.Histo1D(("h_phi", "Phi", 56, -3.14, 3.14), "Phi", "weight_ang")
+    h_phi1 = df_reco_h.Histo1D(("h_phi1", "Phi1", 56, -3.14, 3.14), "Phi1", "weight_ang")
+    list_h_ang = [h_costheta_star, h_costheta1, h_costheta2, h_phi, h_phi1]
+    report_higgs = df_reco_h.Report() 
+    
+    return h_reco_h, report_higgs, list_h_ang
+
+def standard_retrieve (filters, h_higgs, rep_higgs, angular):
     """If the code is in only standard mode, here the event loop will be triggered
     """
-    dict_cut = OrderedDict(Eta=(0, 2), Dr=(2, 4), Pt=(4, 6), Isolation=(6, 8), 
-                           Electron_track=(8, 11), Muon_track=(11, None))    
+    filters_data = {"sig":{"Isolation":[[], [], []], "Eta":[[], [], []], "Dr":[[], [], []], "Pt":[[], [], []],
+                     "Electron_track":[[], [], []], "Muon_track":[[], [], []], "Z_mass":[[], [], []]},
+                    "bkg":{"Isolation":[[], [], []], "Eta":[[], [], []], "Dr":[[], [], []], "Pt":[[], [], []],
+                     "Electron_track":[[], [], []], "Muon_track":[[], [], []], "Z_mass":[[], [], []]}}
+    for cut in filters["sig"].keys():
+        for ch in filters.keys():
+            for i, h_list in enumerate(filters[ch][cut][:2]):
+                for histo in h_list:
+                    filters_data[ch][cut][i].append(histo.GetValue())
+            filters_data[ch][cut][2] = filters[ch][cut][2]
+        h_sig = filters_data["sig"][cut][:2]
+        rep_sig = filters_data["sig"][cut][2]
 
-    # Take the same structure that will be filled with actual data
-    filters_data = {"sig":{"h_unfil":[], "h_fil":[], "rep":[]},
-                    "bkg":{"h_unfil":[], "h_fil":[], "rep":[]}}
-    # First step: iterate on (sig,(huf, hf, rep)) and (bkg,(huf, hf, rep))
-    for ch, ch_dict in filters.items():
-        # Second step: iterate on (hf, list), (huf, list), (rep, list)
-        for list_name, list_el in ch_dict.items():
-            #Third step: iterate on list elements and retrieve data
-            for elem in list_el:
-                filters_data[ch][list_name].append(elem.GetValue())
-    
-    for cut in dict_cut.keys():
-        start, end = dict_cut[cut]
-        h_uf_s = filters_data["sig"]["h_unfil"][start:end]
-        h_f_s = filters_data["sig"]["h_fil"][start:end]
-        h_uf_b = filters_data["bkg"]["h_unfil"][start:end]
-        h_f_b = filters_data["bkg"]["h_fil"][start:end]
-        filtered_plot(h_uf_s, h_uf_b, h_f_s, h_f_b, cut)
-    
-    #Print, for now o screen, of the stats for each applied filter
-    # [rep.Print() for rep in rep_fil]
+        h_bkg = filters_data["bkg"][cut][:2]
+        rep_bkg = filters_data["bkg"][cut][2]
 
-    # #Series of instructions to retriev and plot higgs mass
+        filtered_plot(h_sig, h_bkg, rep_sig, rep_bkg, cut)
+
     list_higgs_data = []
-    
     for h in h_higgs:
         h_higgs_data = h.GetValue()
         list_higgs_data.append(h_higgs_data)
+    higgs_plot(list_higgs_data, "h_mass")
 
-    # higgs_plot(list_higgs_data)
-    higgs_plot(list_higgs_data, rep_higgs)
-    # [(rep.Print(), print("")) for rep in rep_higgs]
+    angular_data = OrderedDict({"costheta_star":[], "costheta1":[], "costheta2":[],
+                                "phi":[], "phi1":[]})
+    for key, h_list in angular.items():
+        for hist in h_list:
+            angular_data[key].append(hist.GetValue())
+        higgs_plot(angular_data[key], key)
+
+    [(rep.Print(), print("")) for rep in rep_higgs]
 
 def preliminar_plot(df, branch_histo, histo_data):
     """For now it"s just a simple plot of unprocessed data
@@ -456,91 +483,128 @@ def preliminar_plot(df, branch_histo, histo_data):
     filename = f"{branch_histo}_{df}.pdf"
     c_histo.SaveAs(filename)
 
-def filtered_plot(histo_unfil_s, histo_unfil_b, histo_fil_s, histo_fil_b, fil):
+def filtered_plot(h_sig, h_bkg, rep_s, rep_b, fil):
     """Plot of the filtered data versus the unprocessed ones"""
+    
+    h_uf_s, h_f_s = h_sig
+    h_uf_b, h_f_b = h_bkg
+    
     # Add canvas
-    canvas = ROOT.TCanvas("canvas","",800,700)
+    canvas = ROOT.TCanvas("canvas","",800,500)
     canvas.cd()
 
     # Add Legend
-    legend = ROOT.TLegend(0.7, 0.6, 0.85, 0.9)
+    legend = ROOT.TLegend(0.18 ,0.7 ,0.33 ,0.85)
     legend.SetFillColor(0)
-    # legend.SetBorderSize(1)
-    legend.SetLineWidth(0)
-    legend.SetTextSize(0.04)
+    legend.SetBorderSize(1)
+    legend.SetLineWidth(1)
+    legend.SetTextSize(0.025)
 
-    delta_y = 1/len(histo_fil_s)
+    delta_y = 1/len(h_f_s)
+    # Add latek note
+    latex = ROOT.TLatex()
+    latex.SetNDC()
+    latex.SetTextSize(0.04)
 
-    for i in range(len(histo_fil_s)):
+    units_dict = {"Isolation":["Electron PfRellIso3", "Muon PfRellIso4"],
+                  "Eta":["Electron Eta [rad]", "Muon Eta [rad]"],
+                  "Dr":["Electron #DeltaR [rad]", "Muon #DeltaR [rad]"],
+                  "Pt":["Electron Pt [GeV]", "Muon Pt [GeV]"],
+                  "Muon_track":["Muon_sip3d", "Muon dxy [cm]", "Muon dz [cm]"],
+                  "Electron_track":["Electron_sip3d", "Electron dxy [cm]", "Electron dz [cm]"],
+                  "Z_mass":["Z mass [GeV]"]}
+
+    for i, (h1, h2, h3, h4, rep12, rep34) in enumerate(zip(h_uf_s, h_f_s, h_uf_b, h_f_b, rep_s, rep_b)):
         canvas.cd()
-        h_ustyle_s = style(histo_unfil_s[i],"e", ROOT.kRed)
-        h_fstyle_s = style(histo_fil_s[i],"f", ROOT.kRed)
-        h_ustyle_b = style(histo_unfil_b[i],"e", ROOT.kAzure)
-        h_fstyle_b = style(histo_fil_b[i],"f", ROOT.kAzure)
-        pad = ROOT.TPad(f"pad_{i}", f"pad_{i}", 0, i*delta_y, 1, (1+i)*delta_y)
+        h_ustyle_s = style(h1, "e", ROOT.kRed)
+        h_fstyle_s = style(h2,"f", ROOT.kRed)
+        h_ustyle_b = style(h3,"e", ROOT.kAzure)
+        h_fstyle_b = style(h4,"f", ROOT.kAzure)
+
+        pad = ROOT.TPad(f"pad_{i}", f"pad_{i}", 0, i*delta_y, 1, (1+i)*delta_y) 
+        # pad.SetTopMargin(0)
         pad.Draw()
         pad.cd()
+        h_ustyle_b.GetXaxis().SetTitle(f"{units_dict[fil][i]}")
         h_ustyle_b.Draw()
         h_fstyle_b.Draw("SAME")
         h_ustyle_s.Draw("SAME")
         h_fstyle_s.Draw("SAME")
-    
-    # print(list_histo_fil[0].GetXaxis.GetTitle())
-    
-    legend.AddEntry(histo_unfil_s[0],"Signal Unfilterd Data")
-    legend.AddEntry(histo_fil_s[0],"Signal Filtered Data")
-    legend.AddEntry(histo_unfil_b[0],"Background Unfilterd Data")
-    legend.AddEntry(histo_fil_b[0],"Background Filtered Data")
+        cut_eff_s = []
+        cut_eff_b = []
+        for cur_rep_s, cur_rep_b in zip(rep12, rep34):
+            cut_eff_s.append(cur_rep_s.GetEff())
+            cut_eff_b.append(cur_rep_b.GetEff())
+
+        latex.DrawText (0.68 ,0.67 ,f"Sig evt pass: {cut_eff_s[0]:.2f}%")
+        latex.DrawText (0.68 ,0.73 ,f"Bkg evt pass: {cut_eff_b[0]:.2f}%")
+
+        sig_pass = h_fstyle_s.GetEntries()/h_ustyle_s.GetEntries()*100
+        bkg_pass = h_fstyle_b.GetEntries()/h_ustyle_b.GetEntries()*100
+        latex.DrawText (0.68 ,0.79 ,f"Sig cnt pass: {sig_pass:.2f}%")
+        latex.DrawText (0.68 ,0.85 ,f"Bkg cnt pass: {bkg_pass:.2f}%")
+
+    h_ustyle_b.SetTitle(f"{fil}")
+    legend.AddEntry(h_uf_s[0],"Signal Unfilterd")
+    legend.AddEntry(h_f_s[0],"Signal Filtered")
+    legend.AddEntry(h_uf_b[0],"Bkg Unfilterd")
+    legend.AddEntry(h_f_b[0],"Bkg Filtered")
     legend.Draw()
-
-    # latex = ROOT.TLatex()
-    # latex.SetNDC()
-    # latex.SetTextSize(0.06)
-    # latex.DrawText (0.7 ,0.83 ,"ciao")
-
-    # pad1.SetBottomMargin(0)    
-    # pad2.SetTopMargin(0)
-    # pad2.SetBottomMargin(0)
 
     #Save plot
     canvas.SaveAs(f"{fil}.pdf")
 
-def higgs_plot(list_histo_higgs, list_rep):
+def higgs_plot(list_histo_higgs, filename):
     """Plot reconstructed Higgs mass for signal, background and data
     """
+    titles_units_dict = {"costheta_star":["cos#Theta*", ""], "costheta1":["cos#Theta_{1}", ""],
+                         "costheta2":["cos#Theta_{2}", ""],
+                         "phi":["#Phi", "[rad]"], "phi1":["#Phi_{1}", "[rad]"],
+                         "h_mass": ["M_{2e2#mu}", "[GeV]"]}
+    
     # Add canvas
     canvas_s = ROOT.TCanvas("canvas_s","",800,700)
+        #  header = ROOT.TLatex()
 
     h_signal = style(list_histo_higgs[0], "e", ROOT.kRed)
     h_background = style(list_histo_higgs[1], "f", ROOT.kAzure)
     h_data = style(list_histo_higgs[2], "m", ROOT.kBlack)
 
+    if filename == "h_mass":
+        h_background.GetYaxis().SetRangeUser(0, 5)
+        h_background.SetTitle("H#rightarrowZZ#rightarrow2e2#mu")
+    else:
+        h_background.GetYaxis().SetRangeUser(0, 10)
+        h_background.SetTitle(f"{titles_units_dict[filename][0]}")
+
+    h_background.GetXaxis().SetTitle(f"{' '.join(titles_units_dict[filename])}")
+    h_background.GetYaxis().SetTitle("Normalized event counts")
+
     canvas_s.cd()
     h_background.Draw("HIST")
     h_signal.Draw("HIST SAME")
     h_data.Draw("PE1 SAME")
-    
-    # print(list_histo_fil[0].GetXaxis.GetTitle())
+        
     # Add Legend
-    legend = ROOT.TLegend(0.7, 0.6, 0.85, 0.9)
+    legend = ROOT.TLegend(0.7 ,0.7 ,0.85 ,0.85)
     legend.SetFillColor(0)
-    # legend.SetBorderSize(1)
-    legend.SetLineWidth(0)
-    legend.SetTextSize(0.04)    
+    legend.SetBorderSize(1)
+    legend.SetLineWidth(1)
+    legend.SetTextSize(0.025)
+
     legend.AddEntry(list_histo_higgs[0], "Signal")
     legend.AddEntry(list_histo_higgs[1], "Background")
     legend.AddEntry(list_histo_higgs[2], "Data")
     legend.Draw()
 
-    [(rep.Print(), print("")) for rep in list_rep]
-
-    # latex = ROOT.TLatex()
-    # latex.SetNDC()
-    # latex.SetTextSize(0.06)
-    # latex.DrawText (0.7 ,0.83 ,f"{list_rep[0].GetValue()}")
+    if filename == "h_mass":
+        latex = ROOT.TLatex()
+        latex.SetNDC()
+        latex.SetTextSize(0.02)
+        latex.DrawLatexNDC(0.7, 0.92, "#sqrt{s} = 8 TeV, L_{int} = 11.6 fb^{-1}")
 
     #Save plot
-    canvas_s.SaveAs("higgs_mass.pdf")
+    canvas_s.SaveAs(f"{filename}.pdf")
 
 def ml_request(ml_data):
     """Prepare dataset to be readable by the machine learning  method
@@ -548,12 +612,14 @@ def ml_request(ml_data):
     list_df_train = []
     if os.path.isfile("train_signal.root") and os.path.isfile("train_background.root"):
         list_df_train.extend([ROOT.RDataFrame("Events", "train_signal.root"),
-                             ROOT.RDataFrame("Events", "train_background.root")])
+                              ROOT.RDataFrame("Events", "train_background.root")])
     else:
+        # These are all the variables that will be put in the training df
         ml_var = ["Muon_pt_1", "Muon_pt_2", "Electron_pt_1", "Electron_pt_2",
-                "Muon_mass_1", "Muon_mass_2","Electron_mass_1", "Electron_mass_2", 
-                "Muon_eta_1", "Muon_eta_2", "Electron_eta_1", "Electron_eta_2",
-                "Muon_phi_1", "Muon_phi_2", "Electron_phi_1", "Electron_phi_2","H_mass"]
+                  "Muon_mass_1", "Muon_mass_2","Electron_mass_1", "Electron_mass_2", 
+                  "Muon_eta_1", "Muon_eta_2", "Electron_eta_1", "Electron_eta_2",
+                  "Muon_phi_1", "Muon_phi_2", "Electron_phi_1", "Electron_phi_2",
+                  "H_mass", "CosTheta_star", "CosTheta1", "CosTheta2", "Phi", "Phi1"]
         columns = ROOT.std.vector("string")()
         for column in ml_var:
             columns.push_back(column)
@@ -563,20 +629,23 @@ def ml_request(ml_data):
 
         for df, df_key in [[ml_data[0], "signal"], [ml_data[1], "background"]]:
             logging.info(f"Book the training and testing events for {df_key}")
-            # Define the training variables
-            df = df.Define("Muon_pt_1", "Muon_pt[0]").Define("Muon_pt_2", "Muon_pt[1]")\
-                .Define("Muon_mass_1", "Muon_mass[0]").Define("Muon_mass_2", "Muon_mass[1]")\
-                .Define("Electron_mass_1", "Electron_mass[0]").Define("Electron_mass_2", "Electron_mass[1]")\
-                .Define("Electron_pt_1", "Electron_pt[0]").Define("Electron_pt_2", "Electron_pt[1]")\
-                .Define("Muon_eta_1","Muon_eta[0]").Define("Muon_eta_2","Muon_eta[1]")\
-                .Define("Electron_eta_1","Electron_eta[0]").Define("Electron_eta_2", "Electron_eta[1]")\
-                .Define("Muon_phi_1", "Muon_phi[0]").Define("Muon_phi_2","Muon_phi[1]")\
-                .Define("Electron_phi_1","Electron_phi[0]").Define("Electron_phi_2", "Electron_phi[1]")\
-                .Define("H_mass","h_mass(Electron_pt, Electron_eta, Electron_phi, Electron_mass, Muon_pt, Muon_eta, Muon_phi, Muon_mass)")
+            #Reconstruct H_mass and angular variables for training.
+            df_charge = df.Filter("(Electron_charge[0] + Electron_charge[1]) == 0 && (Muon_charge[0] + Muon_charge[1]) == 0",
+                                  "Two opposite charged electron and muon pairs")
+            df_reco = reco_define(df_charge)
+            # Define other training variables
+            df_all = df_reco.Define("Muon_pt_1", "Muon_pt[0]").Define("Muon_pt_2", "Muon_pt[1]")\
+                            .Define("Muon_mass_1", "Muon_mass[0]").Define("Muon_mass_2", "Muon_mass[1]")\
+                            .Define("Electron_mass_1", "Electron_mass[0]").Define("Electron_mass_2", "Electron_mass[1]")\
+                            .Define("Electron_pt_1", "Electron_pt[0]").Define("Electron_pt_2", "Electron_pt[1]")\
+                            .Define("Muon_eta_1","Muon_eta[0]").Define("Muon_eta_2","Muon_eta[1]")\
+                            .Define("Electron_eta_1","Electron_eta[0]").Define("Electron_eta_2", "Electron_eta[1]")\
+                            .Define("Muon_phi_1", "Muon_phi[0]").Define("Muon_phi_2","Muon_phi[1]")\
+                            .Define("Electron_phi_1","Electron_phi[0]").Define("Electron_phi_2", "Electron_phi[1]")
 
             # Save ml training datasets to file
             filename = f"train_{df_key}.root"
-            df_train = df.Snapshot("Events", filename, columns, snapshotOptions)
+            df_train = df_all.Snapshot("Events", filename, columns, snapshotOptions)
             list_df_train.append(df_train)            
 
     report_sig = list_df_train[0].Filter("H_mass > 110 && H_mass <140", "H_mass in [110, 140]").Report()
@@ -590,8 +659,8 @@ def ml_preprocessing(sig, bkg, branches):
     """
     # Convert inputs to format readable by machine learning tools
     # T is the transposed vector
-    x_sig = np.vstack([sig[var] for var in branches]).T
-    x_bkg = np.vstack([bkg[var] for var in branches]).T
+    x_sig = np.vstack([sig[str(var)] for var in branches]).T
+    x_bkg = np.vstack([bkg[str(var)] for var in branches]).T
     # Reduce the number of entries to save on disk keeping the original proportion
     entries_frac = 0.5
     nEntries_s = round(entries_frac * x_sig.shape[0])
@@ -629,7 +698,7 @@ def model_train(name, IN_DIM, X_train, X_val, y_train, y_val):
     """Load the already trained model, if not present initialize and train 
     the default model and return self
     """
-    N_EPOCHS = 10
+    N_EPOCHS = 100
     # Series of specific instruction to train a keras model 
     if name == "k_model":
         # Check saved model
@@ -697,7 +766,7 @@ def ml_plot(models):
     plt.title("ROC curve")
     plt.legend(loc="best")
     plt.savefig("Roc_curve")
-    plt.show()
+    # plt.show()
 
     # Plot loss curve for keras model
     plt.figure(2)
@@ -708,21 +777,21 @@ def ml_plot(models):
     plt.xlabel("Epoch") 
     plt.legend(["Train", "Test"], loc="upper left") 
     plt.savefig("loss_curve")
-    plt.show()
+    # plt.show()
 
-def ml_training_retrieve(list_df):
+def ml_retrieve(list_df):
     """Retrieving the dataset to train a machine learning model
     """
     N_EVENTS = 80000
-    N_COLUMNS = 17
-    IN_DIM = 17
+    N_COLUMNS = 22
+    IN_DIM = 22
     if os.path.isfile("x_sh_unbalanced.npy") and os.path.isfile("y_sh_unbalanced.npy"):
         # From now on all variables >1D have capital letter
         X_sh = np.load("x_sh_unbalanced.npy")
         y_sh = np.load("y_sh_unbalanced.npy")
     else:
         # Read data from ROOT files, trigger event loop if not done before
-        list_branches = list_df[0].GetColumnNames()    
+        list_branches = list_df[0].GetColumnNames()
         data_sig = list_df[0].AsNumpy()
         data_bkg = list_df[1].AsNumpy()
         # The arrays are now normalized and shuffled, and their file is saved
@@ -731,14 +800,17 @@ def ml_training_retrieve(list_df):
     # Selection of the events and variables, the sliced columns Must be of IN_DIM size
     X_sh = X_sh[:N_EVENTS , :N_COLUMNS]
     y_sh = y_sh[:N_EVENTS]
-    # Prepare train and test set, all models will need this
-    X_train, X_test, y_train, y_test = train_test_split(X_sh, y_sh, test_size = 0.1)
+    # Prepare train and test set, all models will need this, and validation set for keras
+    # X_train, X_test, y_train, y_test = train_test_split(X_sh, y_sh, test_size = 0.1)
+    X_batch, X_val, y_batch, y_val = train_test_split(X_sh, y_sh, test_size = 0.1)
+    X_train, X_test, y_train, y_test = train_test_split(X_batch, y_batch, test_size = 0.3)
        
     #Dictionary of the used models
     models_dict = {"k_model":{}, "rf_model":{}}
-    # Here the DNNs are trained, fitted and evaluated, they"ll be then ready to be plotted
+    # Here the ML models and DNNs are trained, fitted and evaluated, then are ready to be plotted
     for name in models_dict.keys():
-        models_dict[name] = model_train(name, IN_DIM, X_train, X_test, y_train, y_test)
+        # models_dict[name] = model_train(name, IN_DIM, X_train, X_test, y_train, y_test)
+        models_dict[name] = model_train(name, IN_DIM, X_train, X_val, y_train, y_val)
         model = models_dict[name]["model"]
         eval_dict = model_eval(name, model, X_test, y_test)
         models_dict[name].update(eval_dict)
@@ -790,18 +862,22 @@ if __name__ == "__main__":
     
     if perform_std: 
         # Standard analysis
-        dict_fil, h_higgs, rep_higgs, df_ml = standard_request(args.local)
+        filter_dicts, h_higgs, rep_higgs, df_ml, ang_dict = standard_request(args.local)
         ml_req_df = ml_request(df_ml) 
         if args.both:
             # Preliminary requests done. Let's go to the retrieving part
             preliminar_retrieve(df_prel, branches_prel, histo_prel)
-            standard_retrieve(dict_fil, h_higgs, rep_higgs)
-            ml_training_retrieve(ml_req_df)
+            standard_retrieve(filter_dicts, h_higgs, rep_higgs, ang_dict)
+            ml_retrieve(ml_req_df)
         else:
-            standard_retrieve(dict_fil, h_higgs, rep_higgs)
-            ml_training_retrieve(ml_req_df)            
+            inizio = time.time()
+            standard_retrieve(filter_dicts, h_higgs, rep_higgs, ang_dict)
+            fine = time.time()
+            print("Retrieve time:", fine - inizio)
+            ml_retrieve(ml_req_df)            
             logging.info("You have chosen to perform only standard analysis")
     else:
         pass
     stop = time.time()
-    logging.info(f"elapsed time using signal: {stop - start}\n")
+    # logging.info(f"elapsed code time: {stop - start}\n")
+    print(f"elapsed code time: {stop - start}\n")
