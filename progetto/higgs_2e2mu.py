@@ -7,25 +7,36 @@ import time
 from collections import OrderedDict
 import numpy as np
 import matplotlib.pyplot as plt
+import joblib
 
 from sklearn.utils import shuffle
 from sklearn.preprocessing import StandardScaler
+from sklearn.decomposition import PCA
+from sklearn.ensemble import RandomForestClassifier, AdaBoostClassifier
+from sklearn.neural_network import MLPClassifier
+from sklearn.tree import DecisionTreeClassifier
+from sklearn.svm import SVC
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import roc_curve, auc
-from sklearn.ensemble import RandomForestClassifier
 
 from tensorflow.keras.models import Sequential, load_model
 from tensorflow.keras.layers import Dense, Dropout
 from tensorflow.keras.regularizers import l2
 from tensorflow.keras.optimizers import SGD
-from tensorflow.keras.utils import to_categorical
+from tensorflow.keras.utils import to_categorical, plot_model
 
 #Necessary option in order for argparse to function, if not present ROOT will 
 #prevail over argparse when option are passed from command line
 # ROOT.PyConfig.IgnoreCommandLineOptions = True
 
-logging.basicConfig(filename = "test.log", level = logging.DEBUG, 
-                    format = "%(asctime)s %(message)s")
+logger = logging.getLogger('higgs_2e2mu')
+# The log file is in "write" mode, to return to "append" mode change w with a
+hdlr = logging.FileHandler('higgs_2e2mu.log', mode='w')
+formatter = logging.Formatter('%(asctime)s %(levelname)s %(message)s')
+hdlr.setFormatter(formatter)
+logger.addHandler(hdlr) 
+logger.setLevel(logging.DEBUG)
+
 _description = "The program will perform standard analysis if no option is given."
 
 #Include cpp library for RDataFrame modules
@@ -107,11 +118,13 @@ def access_df(df_key, local_flag, mode):
     """
     if local_flag:
         filename = f"{df_key}_{mode}.root"
+        # Try/except method difficult to use because ROOT exceptions are not easily
+        # catched by python 
         if os.path.isfile(filename):
             df_local = ROOT.RDataFrame("Events", filename)
-            # local_branches = df_local.GetColumnNames()
             df_out = df_local
         else:
+            logger.warning(f"Problem loading local df:{df_key}.\n Starting download")
             df_2e2m = df_prefilter(df_key)
             df_out = snapshot(df_2e2m, filename)
     else:
@@ -127,59 +140,53 @@ def preliminar_request(flag):
                          f"choosing from this list:\n{dataset_link.keys()}\n")
 
     try:
-        #In this way nothing is saved locally but the list of chosen columns can be shown
+        #3D reconstruction of some fundamental variables and its Histograms
+        df_In = access_df(key_df, flag, "p")
+        # These are the default branches that are reconstructed regardless the input given
+        df_In3d = df_In.Define("PV_3d","sqrt(PV_x*PV_x + PV_y*PV_y + PV_z*PV_z)")\
+                       .Define("Muon_ip3d","sqrt(Muon_dxy*Muon_dxy + Muon_dz*Muon_dz)")\
+                       .Define("El_ip3d","sqrt(Electron_dxy*Electron_dxy + Electron_dz*Electron_dz)")
+        
+        # In this way nothing is saved locally but the original list of available
+        # columns can be shown
         df = access_df(key_df, False, "p")
         list_branches = df.GetColumnNames()
 
-        # decide which variables to look first
+        # Decide which variables to look first
         dictOfBranches = {i:list_branches[i] for i in range (0, len(list_branches))}
         list_In = input("Insert the variable numbers to look at, separated by a space"
                         f"press return when you are done:\n{dictOfBranches}\n")
         
-        #control input and retrieve the required branches
+        # Control input and retrieve the required branches
         list_str = list_In.split(" ")
-        b_In = []
+        b_In = ["PV_3d", "Muon_ip3d", "El_ip3d"]
         for i in list_str:
             if i.isdigit() and int(i) < 32:
                 current_branch = dictOfBranches[int(i)]
                 b_In.append(current_branch)
             else:
-                logging.warning(f"Error! {i} is an invalid key!")
+                logger.warning(f"Error! {i} is an invalid key!")
 
-        logging.info(f"These are the branches you chose: {b_In}")
+        # Make sure that each branch is taken only once
+        unique_b_In = list(set(b_In))
+        logger.info(f"These are the chosen branches plus the default 3:{unique_b_In}")
 
-        #Require the chosen df and request the histos
-        b_In.extend(["PV_x", "PV_y", "PV_z", "Muon_dxy", "Muon_dz", 
-                    "Electron_dxy", "Electron_dz"])
-        unique_b_In = list(set(b_In))  
-        df_In = access_df(key_df, flag, "p")
+        # Require the chosen df and request the histos
         h_In = []
-
         for branch in unique_b_In:
-            current_histo = df_In.Histo1D(branch)
+            current_histo = df_In3d.Histo1D(branch)
             h_In.append(current_histo)
-        #3D reconstruction of some fundamental variables
-        pv_3d = df_In.Define("PV_3d","sqrt(PV_x*PV_x + PV_y*PV_y + PV_z*PV_z)")
-        mu_3d = df_In.Define("Muon_3d","sqrt(Muon_dxy*Muon_dxy + Muon_dz*Muon_dz)")
-        el_3d = df_In.Define("El_3d","sqrt(Electron_dxy*Electron_dxy + Electron_dz*Electron_dz)")
 
-        #Retrieve the relative histograms
-        h_pv_3d = pv_3d.Histo1D("PV_3d")
-        h_mu_3d = mu_3d.Histo1D("Muon_3d")
-        h_el_3d = el_3d.Histo1D("El_3d")
-
-        #Update of branches and histogram lists
-        unique_b_In.extend(["PV_3d", "Muon_3d", "El_3d"])
-        h_In.extend([h_pv_3d, h_mu_3d, h_el_3d])
     except KeyError as e:
         print(f"Cannot read the given key!\n{e}")
         sys.exit(1)
     return key_df, unique_b_In, h_In
 
 def preliminar_retrieve(df_prel, b_prel, h_prel):
-    """Retrieve and plot histos previously requested
+    """Retrieve and plot histos previously requested. The histo will then be saved
+    both in a .pdf and in a .root file in order to be further investigated
     """
-    #Trigger event loop and plot
+    # Trigger event loop and plot
     for branch, hist in zip(b_prel, h_prel):
         h = hist.GetValue()
         preliminar_plot(df_prel, branch, h)
@@ -241,7 +248,7 @@ def standard_request(flag):
     df_b1 = standard_define(df_b)
     df_d1 = standard_define(df_d)
 
-    start = time.time()
+    start1 = time.time()
     #Request filtered and unfiltered data
     dict_filter = {}
     dict_filter["sig"] = show_cut(df_s1)
@@ -250,7 +257,7 @@ def standard_request(flag):
     # Request ml dataframe
     df_ml = [df_s, df_b]
 
-    #Weights
+    # Weights
     luminosity = 11580.0  # Integrated luminosity of the data samples
     xsec_sig = 0.0065  # ZZ->2el2mu: Standard Model cross-section
     nevt_sig = 299973.0  # ZZ->2el2mu: Number of simulated events
@@ -264,11 +271,11 @@ def standard_request(flag):
     weight_ang_sig = 91/12065
     weight_ang_bkg = 91/51237
 
-    #Request all the necessary to reconstruct the Higgs mass
+    # Request all the necessary to reconstruct the Higgs mass
     h_sig_higgs, report_sig, h_sig_ang = reco_higgs(df_s1, weight_sig, weight_ang_sig)
     h_bkg_higgs, report_bkg, h_bkg_ang = reco_higgs(df_b1, weight_bkg, weight_ang_bkg)
     h_data_higgs,report_data, h_data_ang = reco_higgs(df_d1, weight_data, weight_ang_data)
-    stop = time.time()
+    stop1 = time.time()
     dict_angular = OrderedDict({"costheta_star":[], "costheta1":[], "costheta2":[],
                                 "phi":[], "phi1":[]})
     for idx, h_list in enumerate(dict_angular.values()):
@@ -276,7 +283,8 @@ def standard_request(flag):
 
     list_higgs = [h_sig_higgs, h_bkg_higgs, h_data_higgs]
     list_rep_higgs = [report_sig, report_bkg, report_data]
-    print("request time:", stop-start)
+    
+    logger.info(f"standard request time: {stop1-start1:.2f}s")
 
     return dict_filter, list_higgs, list_rep_higgs, df_ml, dict_angular
 
@@ -385,29 +393,32 @@ def good_events(df_2e2m):
 def reco_higgs(df, weight, weight_ang):
     """Recontruction of the Higgs mass
     """
-    #Selection of only the potential good events 
+    # Selection of only the potential good events 
     df_base = good_events(df)
     
-    #Compute z and H masses from it
+    # Compute z and H masses from it
     df_z_mass = reco_define(df_base)
     #Filter on z masses
     df_z1 = df_z_mass.Filter("Z_mass[0] > 40 && Z_mass[0] < 120", "First candidate in [40, 120]") 
     df_z2 = df_z1.Filter("Z_mass[1] > 12 && Z_mass[1] < 120", "Second candidate in [12, 120]")
 
-    #Define weights
+    # Define weights
     df_reco = df_z2.Define("weight", f"{weight}").Define("weight_ang", f"{weight_ang}")
     h_reco_h = df_reco.Histo1D(("h_sig_2el2mu", "", 36, 70, 180), "H_mass", "weight")
-    #Filter on Higgs mass
-    df_reco_h = df_reco
-    # df_reco_h = df_reco.Filter("H_mass > 110 && H_mass <140", "H_mass in [110, 140]")
 
-    #Reconstructed angular variables
-    h_costheta_star = df_reco_h.Histo1D(("h_costheta_star", "CosTheta_star", 56, -1, 1), "CosTheta_star", "weight_ang")
-    h_costheta1 = df_reco_h.Histo1D(("h_costheta1", "CosTheta1", 56, -1, 1), "CosTheta1", "weight_ang")
-    h_costheta2 = df_reco_h.Histo1D(("h_costheta2", "CosTheta2", 56, -1, 1), "CosTheta2", "weight_ang")
-    h_phi = df_reco_h.Histo1D(("h_phi", "Phi", 56, -3.14, 3.14), "Phi", "weight_ang")
-    h_phi1 = df_reco_h.Histo1D(("h_phi1", "Phi1", 56, -3.14, 3.14), "Phi1", "weight_ang")
+    # Reconstruction of angular variables
+    h_costheta_star = df_reco.Histo1D(("h_costheta_star", "CosTheta_star", 56, -1, 1), "CosTheta_star", "weight_ang")
+    h_costheta1 = df_reco.Histo1D(("h_costheta1", "CosTheta1", 56, -1, 1), "CosTheta1", "weight_ang")
+    h_costheta2 = df_reco.Histo1D(("h_costheta2", "CosTheta2", 56, -1, 1), "CosTheta2", "weight_ang")
+    h_phi = df_reco.Histo1D(("h_phi", "Phi", 56, -3.14, 3.14), "Phi", "weight_ang")
+    h_phi1 = df_reco.Histo1D(("h_phi1", "Phi1", 56, -3.14, 3.14), "Phi1", "weight_ang")
     list_h_ang = [h_costheta_star, h_costheta1, h_costheta2, h_phi, h_phi1]
+    
+    # Filter on a narrow window of the Higgs mass if applied before lowers 
+    # too much the events available to make decent plots.
+    # The report will be useful in the ml analysis.
+    df_reco_h = df_reco.Filter("H_mass > 110 && H_mass <140", 
+                               "Cut on a narrow window: H_mass in [110, 140]")
     report_higgs = df_reco_h.Report() 
     
     return h_reco_h, report_higgs, list_h_ang
@@ -415,6 +426,7 @@ def reco_higgs(df, weight, weight_ang):
 def standard_retrieve (filters, h_higgs, rep_higgs, angular):
     """If the code is in only standard mode, here the event loop will be triggered
     """
+    start2 = time.time()
     filters_data = {"sig":{"Isolation":[[], [], []], "Eta":[[], [], []], "Dr":[[], [], []], "Pt":[[], [], []],
                      "Electron_track":[[], [], []], "Muon_track":[[], [], []], "Z_mass":[[], [], []]},
                     "bkg":{"Isolation":[[], [], []], "Eta":[[], [], []], "Dr":[[], [], []], "Pt":[[], [], []],
@@ -445,23 +457,28 @@ def standard_retrieve (filters, h_higgs, rep_higgs, angular):
         for hist in h_list:
             angular_data[key].append(hist.GetValue())
         higgs_plot(angular_data[key], key)
-
-    [(rep.Print(), print("")) for rep in rep_higgs]
+    
+    # Print on shell the complete report on the standard analysis 
+    for ch, rep in zip(["signal", "bakground", "data"], rep_higgs):
+        print(f"{ch} report:\n")
+        rep.Print()
+    
+    stop2 = time.time()
+    logger.info(f"Standard retrieve time: {stop2 - start2:.2f}s")
 
 def preliminar_plot(df, branch_histo, histo_data):
     """For now it"s just a simple plot of unprocessed data
     """
-    #General Canvas Settings
+    # General Canvas Settings
     ROOT.gStyle.SetOptStat(0)
     ROOT.gStyle.SetTextFont(42)
     c_histo = ROOT.TCanvas(f"c_histo_{branch_histo}","",800,700)
     c_histo.cd()
-    # ROOT.SetOwnership(c_histo, False)
 
-    #Set and Draw histogram for data points
+    # Set and Draw histogram for data points
     x_max = histo_data.GetXaxis().GetXmax()
     x_min = histo_data.GetXaxis().GetXmin()
-    logging.info(f"One day minumun and maximun of the {branch_histo}"
+    logger.info(f"One day minumun and maximun of the {branch_histo}"
                  f" will be useful...but it is NOT This day!{x_max,x_min}")
     # histo_data.GetXaxis().SetRangeUser(x_min,x_max)
     
@@ -471,17 +488,17 @@ def preliminar_plot(df, branch_histo, histo_data):
     histo_data.Draw()
 
     # Add Legend
-    legend = ROOT.TLegend(0.7, 0.6, 0.85, 0.9)
+    legend = ROOT.TLegend(0.7, 0.5, 0.85, 0.7)
     legend.SetFillColor(0)
-    # legend.SetBorderSize(1)
+    legend.SetBorderSize(1)
     legend.SetLineWidth(0)
     legend.SetTextSize(0.04)
     legend.AddEntry(histo_data,df)
     legend.Draw()
 
     #Save plot
-    filename = f"{branch_histo}_{df}.pdf"
-    c_histo.SaveAs(filename)
+    c_histo.SaveAs(f"{branch_histo}_{df}.pdf")
+    c_histo.SaveAs(f"{branch_histo}_{df}.root")
 
 def filtered_plot(h_sig, h_bkg, rep_s, rep_b, fil):
     """Plot of the filtered data versus the unprocessed ones"""
@@ -628,9 +645,10 @@ def ml_request(ml_data):
         snapshotOptions.fLazy = True
 
         for df, df_key in [[ml_data[0], "signal"], [ml_data[1], "background"]]:
-            logging.info(f"Book the training and testing events for {df_key}")
-            #Reconstruct H_mass and angular variables for training.
-            df_charge = df.Filter("(Electron_charge[0] + Electron_charge[1]) == 0 && (Muon_charge[0] + Muon_charge[1]) == 0",
+            logger.info(f"Book the training and testing events for {df_key}")
+            # Reconstruct H_mass and angular variables for training.
+            df_charge = df.Filter("(Electron_charge[0] + Electron_charge[1]) == 0 "\
+                                  "&& (Muon_charge[0] + Muon_charge[1]) == 0",
                                   "Two opposite charged electron and muon pairs")
             df_reco = reco_define(df_charge)
             # Define other training variables
@@ -650,12 +668,12 @@ def ml_request(ml_data):
 
     report_sig = list_df_train[0].Filter("H_mass > 110 && H_mass <140", "H_mass in [110, 140]").Report()
     report_bkg = list_df_train[1].Filter("H_mass > 110 && H_mass <140", "H_mass in [110, 140]").Report()
-    list_df_train.extend([report_sig, report_bkg])
-    return list_df_train
+    list_rep_train = [report_sig, report_bkg]
+    return list_df_train, list_rep_train
 
 def ml_preprocessing(sig, bkg, branches):
     """It prepares the arrays to be read by most ML tools.
-    the arrays are then saved in a .npy file
+    The arrays are then saved in a .npy file
     """
     # Convert inputs to format readable by machine learning tools
     # T is the transposed vector
@@ -678,6 +696,7 @@ def ml_preprocessing(sig, bkg, branches):
     x_sh, y_sh = shuffle(x_sc, y)
     np.save("x_sh_unbalanced.npy", x_sh)
     np.save("y_sh_unbalanced.npy", y_sh)
+    # To have an idea of the distribution in variance of the data, the PCA is shown
     return (x_sh, y_sh)
 
 def keras_model(in_dim):
@@ -696,40 +715,78 @@ def keras_model(in_dim):
 
 def model_train(name, IN_DIM, X_train, X_val, y_train, y_val):
     """Load the already trained model, if not present initialize and train 
-    the default model and return self
+    the default model and return self.
+    WARNING: joblib is basically equivalet to Python pickle with an optimized handling 
+    for large numpy arrays, therefore it works only with matching python and sklearn
+    versions. If different, the code is set to train again the models.
     """
     N_EPOCHS = 100
     # Series of specific instruction to train a keras model 
     if name == "k_model":
         # Check saved model
-        if os.path.isdir(f"k_model_ep{N_EPOCHS}_nf{IN_DIM}") and\
-           os.path.isfile(f"k_history_ep{N_EPOCHS}_nf{IN_DIM}.npy"):
-           # Load saved model
-           k_model = load_model(f"k_model_ep{N_EPOCHS}_nf{IN_DIM}")
-           k_history = np.load(f"k_history_ep{N_EPOCHS}_nf{IN_DIM}.npy",
-                               allow_pickle="TRUE").item()
-        else:
-            # Train and save model to folder
-            # Keras needs categorical labels (means one column per class "0" and "1")
-            Y_train_k = to_categorical(y_train)
-            Y_val_k = to_categorical(y_val)
-            start = time.time()
-            k_model = keras_model(IN_DIM)
-            k_history = k_model.fit(X_train, Y_train_k,
-                                        validation_data = (X_val,Y_val_k), 
-                                        epochs=N_EPOCHS, batch_size=64)
-            k_model.save(f"k_model_ep{N_EPOCHS}_nf{IN_DIM}")
-            np.save(f"k_history_ep{N_EPOCHS}_nf{IN_DIM}.npy", k_history.history)
-            k_history = k_history.history
-            stop = time.time()
-            logging.info(f"Elapsed time training the net:{stop - start}")
+        try:
+            # Load saved model
+            k_model = load_model(f"k_model_ep{N_EPOCHS}_nf{IN_DIM}")
+            k_history = np.load(f"k_history_ep{N_EPOCHS}_nf{IN_DIM}.npy",
+                                 allow_pickle="TRUE").item()
+            return {"model":k_model, "history":k_history}
+        except (IOError, OSError, KeyError) as e:
+            logger.warning(f"Something went wrong loading keras model or history: {e}")
+            pass
+        # Train and save model to folder
+        # Keras needs categorical labels (means one column per class "0" and "1")
+        logger.info("Keras model or history impossible to load. start training.")
+        Y_train_k = to_categorical(y_train)
+        Y_val_k = to_categorical(y_val)
+        k_model = keras_model(IN_DIM)
+        start1 = time.time()
+        k_history = k_model.fit(X_train, Y_train_k,
+                                    validation_data = (X_val,Y_val_k), 
+                                    epochs=N_EPOCHS, batch_size=64)
+        k_model.save(f"k_model_ep{N_EPOCHS}_nf{IN_DIM}")
+        np.save(f"k_history_ep{N_EPOCHS}_nf{IN_DIM}.npy", k_history.history)
+        k_history = k_history.history
+        stop1 = time.time()
+        logger.info(f"Elapsed time training keras model:{stop1 - start1:.2f}s")
         return {"model":k_model, "history":k_history}
-    
-    elif name == "rf_model": #this may be a list
+    # The model is one of the sklearn package
+    elif os.path.isfile(f"{name}.pkl"):
+        try:
+            # Load the pickle file
+            clf_load = joblib.load(f'{name}.pkl')
+            return {"model": clf_load}
+        except (IOError, OSError, KeyError) as e:
+            logger.warning(f"Something went wrong loading {name}.pkl: {e}")
+            pass
+    else:
+        logger.info(f"Local trained {name} impossible to load. Start training.")
+        pass
+    # If there are problems loading the local trained model or the model is yet
+    # to be trained, it will be, and it will be saved locally.
+    start3 = time.time()
+    if name == "rf_model":
         # Supervised transformation based on random forests
         rf = RandomForestClassifier(max_depth=7, n_estimators=IN_DIM)
-        rf.fit(X_train, y_train)
-        return {"model":rf}
+        model = rf.fit(X_train, y_train)
+    elif name == "mlp_model":
+        # Multi-layer Perceptron model
+        mlp = MLPClassifier(hidden_layer_sizes=(IN_DIM+5,), activation='tanh',
+                            batch_size=64, max_iter=150)
+        model = mlp.fit(X_train, y_train)
+    elif name == "ada_model":
+        # Ada boost decision tree classifier
+        bdt = AdaBoostClassifier(DecisionTreeClassifier(max_depth=2),
+                                 n_estimators=200)
+        model = bdt.fit(X_train, y_train)
+    elif name == "svc_model":
+        # Linear Support Vector Classification
+        svc = SVC(C=10, kernel='rbf', probability=True, max_iter=200)
+        model = svc.fit(X_train, y_train)
+    stop3 = time.time()
+    logger.info(f"Elapsed time training {name}: {stop3 - start3:.2f}s")
+    # Save model on disk
+    joblib.dump(model, f"{name}.pkl")    
+    return {"model":model}
 
 def model_eval(name, model, X_test, y_test):
     """Evaluate the performaces of the classifier
@@ -738,26 +795,41 @@ def model_eval(name, model, X_test, y_test):
         # Return the probability to belong to a class (2D array) 
         # Takes only the column of the "1" class (containing the probability)
         y_pred = model.predict(X_test)[:, 1]
-    elif name == "rf_model":
+    elif name in ["rf_model", "mlp_model", "ada_model", "svc_model"]:
         y_pred = model.predict_proba(X_test)[:, 1]
-    
-    # fpr_keras, tpr_keras, thresholds_keras = roc_curve(y_test, y_pred)
-    # auc_keras = auc(fpr_keras, tpr_keras)
-    # return {"fpr":fpr_keras, "tpr":tpr_keras, "auc":auc_keras}
-    
+
     # Compute ROC curve and AUC
     fpr, tpr, thresholds = roc_curve(y_test, y_pred)
     auc_model = auc(fpr, tpr)
     return {"fpr":fpr, "tpr":tpr, "auc":auc_model, "ths":thresholds}
 
-def ml_plot(models):
-    """All the models are plotted
+def ml_plot(models, rep_train, rep_higgs):
+    """All the models are plotted and the two points from two different filters
+    of the std analysis are added.
     """
+    # Here there is only the prefilter to ensure that the first two elements, 
+    # which are the ones that are used for all the reconstructed variables,
+    # are of opposite charge, and the narrow filter on the Higgs mass 
+    for cut_sig, cut_bkg in zip(rep_train[0], rep_train[1]):
+        #This works only because there is only registered 1 filter in the report
+        h_sig_eff = cut_sig.GetEff()*0.01
+        h_bkg_rej = 1 - cut_bkg.GetEff()*0.01
+    
+    cut_eff_sig = []
+    cut_eff_bkg = []
+    for cut_sig, cut_bkg in zip(rep_higgs[0], rep_higgs[1],):
+        cut_eff_sig.append(cut_sig.GetEff()*0.01)
+        cut_eff_bkg.append(cut_bkg.GetEff()*0.01)
+    all_sig_eff = np.prod(cut_eff_sig)
+    all_bkg_rej = 1 - np.prod(cut_eff_bkg)
+
     # Plot the ROC curves
-    plt.figure(1)
+    plt.figure()
     plt.plot([0, 1], [1, 0], "k--")
-    plt.plot(0.7368, 1 - 0.0906, "kx", label="std filter only higgs mass")
-    plt.plot(0.25, 1 - 0.0103, "r*", label="std all filters + higgs mass")
+    plt.plot(h_sig_eff, h_bkg_rej, "kx", 
+             label=f"std filter only on H mass:({h_sig_eff:.3f}, {h_bkg_rej:.3f})")
+    plt.plot(all_sig_eff, all_bkg_rej, "r*",
+             label=f"std all filters + H mass:({all_sig_eff:.3f}, {all_bkg_rej:.3f})")
     for name in models.keys():
         model = models[name]
         plt.plot(model["tpr"], 1 - model["fpr"], label=f'{name} (area = {model["auc"]:.3f})')
@@ -766,10 +838,9 @@ def ml_plot(models):
     plt.title("ROC curve")
     plt.legend(loc="best")
     plt.savefig("Roc_curve")
-    # plt.show()
 
     # Plot loss curve for keras model
-    plt.figure(2)
+    plt.figure()
     plt.plot(models["k_model"]["history"]["loss"]) 
     plt.plot(models["k_model"]["history"]["val_loss"]) 
     plt.title("Keras Model loss") 
@@ -777,48 +848,66 @@ def ml_plot(models):
     plt.xlabel("Epoch") 
     plt.legend(["Train", "Test"], loc="upper left") 
     plt.savefig("loss_curve")
-    # plt.show()
 
-def ml_retrieve(list_df):
-    """Retrieving the dataset to train a machine learning model
+def ml_retrieve(df_train, rep_train, rep_higgs):
+    """Retrieving the dataset to train a ML or a DNN model, perform the training 
+    and testing and plot them in a ROC curve for comparison.
+    The code is set to search the trained models locally and load them, to perform
+    the training remove the relative file/dir from the working drectory.
+    The number of given events, features and ephocs (for the keras model) can be set.
     """
     N_EVENTS = 80000
     N_COLUMNS = 22
     IN_DIM = 22
-    if os.path.isfile("x_sh_unbalanced.npy") and os.path.isfile("y_sh_unbalanced.npy"):
+    try:
         # From now on all variables >1D have capital letter
         X_sh = np.load("x_sh_unbalanced.npy")
         y_sh = np.load("y_sh_unbalanced.npy")
-    else:
+    except (IOError, OSError, KeyError) as e:
+        logger.warning(f"Something went wrong loading .npy file: {e}")
+        logger.info("Read data from ROOT files, convert to .npy and prepare for ML."
+                    "This trigger the event loop if not done before")
         # Read data from ROOT files, trigger event loop if not done before
-        list_branches = list_df[0].GetColumnNames()
-        data_sig = list_df[0].AsNumpy()
-        data_bkg = list_df[1].AsNumpy()
+        list_branches = df_train[0].GetColumnNames()
+        data_sig = df_train[0].AsNumpy()
+        data_bkg = df_train[1].AsNumpy()
         # The arrays are now normalized and shuffled, and their file is saved
         X_sh, y_sh = ml_preprocessing(data_sig, data_bkg, list_branches)
     
+    # To have an idea of the distribution in variance of the data, the PCA is given.
+    pca = PCA(n_components=2)
+    X_pca = pca.fit_transform(X_sh)
+    # Quick plot
+    plt.figure()
+    target_names = ["signal", "background"]
+    colors = ["navy", "darkorange"]
+    lw = 2
+    for color, i, target_name in zip(colors, [0, 1], target_names):
+        plt.scatter(X_pca[y_sh == i, 0], X_pca[y_sh == i, 1], color=color, alpha=.8, lw=lw,
+                    label=target_name)
+    plt.legend(loc='best', shadow=False, scatterpoints=1)
+    plt.title('PCA of dataset')
+    plt.savefig("PCA")
+
     # Selection of the events and variables, the sliced columns Must be of IN_DIM size
     X_sh = X_sh[:N_EVENTS , :N_COLUMNS]
     y_sh = y_sh[:N_EVENTS]
+
     # Prepare train and test set, all models will need this, and validation set for keras
-    # X_train, X_test, y_train, y_test = train_test_split(X_sh, y_sh, test_size = 0.1)
     X_batch, X_val, y_batch, y_val = train_test_split(X_sh, y_sh, test_size = 0.1)
     X_train, X_test, y_train, y_test = train_test_split(X_batch, y_batch, test_size = 0.3)
        
     #Dictionary of the used models
-    models_dict = {"k_model":{}, "rf_model":{}}
+    models_dict = {"k_model":{}, "rf_model":{}, "mlp_model":{}, "ada_model":{}, "svc_model":{}}
     # Here the ML models and DNNs are trained, fitted and evaluated, then are ready to be plotted
     for name in models_dict.keys():
-        # models_dict[name] = model_train(name, IN_DIM, X_train, X_test, y_train, y_test)
         models_dict[name] = model_train(name, IN_DIM, X_train, X_val, y_train, y_val)
         model = models_dict[name]["model"]
         eval_dict = model_eval(name, model, X_test, y_test)
         models_dict[name].update(eval_dict)
-
-    ml_plot(models_dict)
-    list_df[2].Print()
-    list_df[3].Print()
-    return (list_df[2], list_df[3])
+    
+    # Plot all the models
+    ml_plot(models_dict, rep_train, rep_higgs)
 
 if __name__ == "__main__":
     
@@ -851,11 +940,11 @@ if __name__ == "__main__":
         if args.preliminar:
             # Standard analysis is excluded
             perform_std = False
-            logging.info("You have disabled standard analysis")
+            logger.info("You have disabled standard analysis")
             # There are no other requests, event loop can be triggered
             preliminar_retrieve(df_prel, branches_prel, histo_prel)
         else:
-            logging.info("It will pass to the requests for standard analysis")
+            logger.info("It will pass to the requests for standard analysis")
             pass
     else:
         pass
@@ -863,21 +952,18 @@ if __name__ == "__main__":
     if perform_std: 
         # Standard analysis
         filter_dicts, h_higgs, rep_higgs, df_ml, ang_dict = standard_request(args.local)
-        ml_req_df = ml_request(df_ml) 
+        ml_req_df, ml_req_rep = ml_request(df_ml) 
         if args.both:
             # Preliminary requests done. Let's go to the retrieving part
             preliminar_retrieve(df_prel, branches_prel, histo_prel)
             standard_retrieve(filter_dicts, h_higgs, rep_higgs, ang_dict)
-            ml_retrieve(ml_req_df)
+            ml_retrieve(ml_req_df, ml_req_rep, rep_higgs)
         else:
-            inizio = time.time()
             standard_retrieve(filter_dicts, h_higgs, rep_higgs, ang_dict)
-            fine = time.time()
-            print("Retrieve time:", fine - inizio)
-            ml_retrieve(ml_req_df)            
-            logging.info("You have chosen to perform only standard analysis")
+            ml_retrieve(ml_req_df, ml_req_rep, rep_higgs)            
+            logger.info("You have chosen to perform only standard analysis")
     else:
         pass
     stop = time.time()
-    # logging.info(f"elapsed code time: {stop - start}\n")
-    print(f"elapsed code time: {stop - start}\n")
+    logger.info(f"elapsed code time: {stop - start:.2f}s\n")
+
