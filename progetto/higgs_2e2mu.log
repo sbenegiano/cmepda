@@ -1,0 +1,7 @@
+2020-07-05 12:44:53,974 WARNING Problem loading local df:signal.
+ Starting download
+2020-07-05 12:45:27,366 INFO standard request time: 1.09s
+2020-07-05 12:46:09,041 INFO Standard retrieve time: 41.67s
+2020-07-05 12:46:16,031 INFO You have chosen to perform only standard analysis
+2020-07-05 12:46:16,031 INFO elapsed code time: 82.06s
+
