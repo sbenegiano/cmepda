@@ -1,0 +1,636 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+  <meta charset="utf-8">
+  
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  
+  <title>Higgs 2e2mu analysis &mdash; Higgs 2e2mu - CMEPDA Project  documentation</title>
+  
+
+  
+  <link rel="stylesheet" href="_static/css/theme.css" type="text/css" />
+  <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+
+  
+  
+  
+  
+
+  
+  <!--[if lt IE 9]>
+    <script src="_static/js/html5shiv.min.js"></script>
+  <![endif]-->
+  
+    
+      <script type="text/javascript" id="documentation_options" data-url_root="./" src="_static/documentation_options.js"></script>
+        <script src="_static/jquery.js"></script>
+        <script src="_static/underscore.js"></script>
+        <script src="_static/doctools.js"></script>
+        <script src="_static/language_data.js"></script>
+    
+    <script type="text/javascript" src="_static/js/theme.js"></script>
+
+    
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="README" href="readme.html" />
+    <link rel="prev" title="progetto" href="modules.html" /> 
+</head>
+
+<body class="wy-body-for-nav">
+
+   
+  <div class="wy-grid-for-nav">
+    
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+          
+
+          
+            <a href="index.html" class="icon icon-home" alt="Documentation Home"> Higgs 2e2mu - CMEPDA Project
+          
+
+          
+          </a>
+
+          
+            
+            
+          
+
+          
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+
+          
+        </div>
+
+        
+        <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="main navigation">
+          
+            
+            
+              
+            
+            
+              <p class="caption"><span class="caption-text">Contents:</span></p>
+<ul class="current">
+<li class="toctree-l1 current"><a class="reference internal" href="modules.html">progetto</a><ul class="current">
+<li class="toctree-l2 current"><a class="current reference internal" href="#">Higgs 2e2mu analysis</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#module-progetto.higgs_2e2mu">progetto.higgs_2e2mu</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#module-progetto">Module contents</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="readme.html">README</a></li>
+</ul>
+
+            
+          
+        </div>
+        
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+
+      
+      <nav class="wy-nav-top" aria-label="top navigation">
+        
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="index.html">Higgs 2e2mu - CMEPDA Project</a>
+        
+      </nav>
+
+
+      <div class="wy-nav-content">
+        
+        <div class="rst-content">
+        
+          
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<div role="navigation" aria-label="breadcrumbs navigation">
+
+  <ul class="wy-breadcrumbs">
+    
+      <li><a href="index.html" class="icon icon-home"></a> &raquo;</li>
+        
+          <li><a href="modules.html">progetto</a> &raquo;</li>
+        
+      <li>Higgs 2e2mu analysis</li>
+    
+    
+      <li class="wy-breadcrumbs-aside">
+        
+            
+            <a href="_sources/progetto.rst.txt" rel="nofollow"> View page source</a>
+          
+        
+      </li>
+    
+  </ul>
+
+  
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+            
+  <div class="section" id="higgs-2e2mu-analysis">
+<h1>Higgs 2e2mu analysis<a class="headerlink" href="#higgs-2e2mu-analysis" title="Permalink to this headline">¶</a></h1>
+<div class="section" id="module-progetto.higgs_2e2mu">
+<span id="progetto-higgs-2e2mu"></span><h2>progetto.higgs_2e2mu<a class="headerlink" href="#module-progetto.higgs_2e2mu" title="Permalink to this headline">¶</a></h2>
+<p>Project for the CMEPDA exam.</p>
+<dl class="py function">
+<dt id="progetto.higgs_2e2mu.access_df">
+<code class="sig-prename descclassname">progetto.higgs_2e2mu.</code><code class="sig-name descname">access_df</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">df_key</span></em>, <em class="sig-param"><span class="n">local_flag</span></em>, <em class="sig-param"><span class="n">mode</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/progetto/higgs_2e2mu.html#access_df"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#progetto.higgs_2e2mu.access_df" title="Permalink to this definition">¶</a></dt>
+<dd><p>Access given dataset from appropriate location. Download to local
+file if needed. (Lazy)</p>
+<dl>
+<dt>Args:</dt><dd><dl class="simple">
+<dt>df_key (str): label of the chosen dataset</dt><dd><p>(“signal”, “background” or “data”).</p>
+</dd>
+</dl>
+<p>local_flag (bool): boolean flag to save local file or not.
+mode (str): tag to identify preliminar or standard analysis</p>
+<blockquote>
+<div><p>(“p” or “std”)</p>
+</div></blockquote>
+</dd>
+<dt>Returns:</dt><dd><p>RDataFrame: requested RDF</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt id="progetto.higgs_2e2mu.df_prefilter">
+<code class="sig-prename descclassname">progetto.higgs_2e2mu.</code><code class="sig-name descname">df_prefilter</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">df_key</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/progetto/higgs_2e2mu.html#df_prefilter"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#progetto.higgs_2e2mu.df_prefilter" title="Permalink to this definition">¶</a></dt>
+<dd><p>Prefilter RDF selecting events with 2 or more electrons and
+2 or more muons.</p>
+<dl class="simple">
+<dt>Args:</dt><dd><dl class="simple">
+<dt>df_key (str): key to access global dataset_link dictionary</dt><dd><p>containing the chosen dataset (e.g. “signal”).</p>
+</dd>
+</dl>
+</dd>
+<dt>Returns:</dt><dd><p>RDataFrame: Filtered RDF of chosen dataset.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt id="progetto.higgs_2e2mu.filtered_plot">
+<code class="sig-prename descclassname">progetto.higgs_2e2mu.</code><code class="sig-name descname">filtered_plot</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">histo_sig</span></em>, <em class="sig-param"><span class="n">histo_bkg</span></em>, <em class="sig-param"><span class="n">reps_sig</span></em>, <em class="sig-param"><span class="n">reps_bkg</span></em>, <em class="sig-param"><span class="n">fil</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/progetto/higgs_2e2mu.html#filtered_plot"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#progetto.higgs_2e2mu.filtered_plot" title="Permalink to this definition">¶</a></dt>
+<dd><p>Generate histogram(s) figure for given filter. Save to file.</p>
+<p>Multiple histograms (filter with more than one variable) are generated
+on separated plots and put in the same figure.</p>
+<dl class="simple">
+<dt>Args:</dt><dd><p>histo_sig (list): list of unfiltered and filtered histogram(s) of “sig”.
+histo_bkg (list): list of unfiltered and filtered histogram(s) of “bkg”.
+reps_sig (list): list of filter report(s) of “sig”.
+reps_bkg (list): list of filter report(s) of “bkg”.
+fil (str): filter name, used to set title of plot and save file.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt id="progetto.higgs_2e2mu.good_events">
+<code class="sig-prename descclassname">progetto.higgs_2e2mu.</code><code class="sig-name descname">good_events</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">df_2e2m</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/progetto/higgs_2e2mu.html#good_events"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#progetto.higgs_2e2mu.good_events" title="Permalink to this definition">¶</a></dt>
+<dd><p>Select the events that pass the cuts used in the 2012 CERN article.
+(Lazy)</p>
+<dl class="simple">
+<dt>Args:</dt><dd><p>df_2e2m (RDataFrame): Prefiltered (2 e and 2 mu) RDF.</p>
+</dd>
+<dt>Returns:</dt><dd><p>RdataFrame: Filtered RDF</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt id="progetto.higgs_2e2mu.higgs_plot">
+<code class="sig-prename descclassname">progetto.higgs_2e2mu.</code><code class="sig-name descname">higgs_plot</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">histos_higgs</span></em>, <em class="sig-param"><span class="n">filename</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/progetto/higgs_2e2mu.html#higgs_plot"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#progetto.higgs_2e2mu.higgs_plot" title="Permalink to this definition">¶</a></dt>
+<dd><p>Plot reconstructed Higgs mass for signal, background and data.
+Save figure to file.</p>
+<dl>
+<dt>Args:</dt><dd><dl class="simple">
+<dt>histos_higgs (list): list of histograms of Higgs mass</dt><dd><p>of “sig”, “bkg” and “data”.</p>
+</dd>
+</dl>
+<p>filename (str): name of file to save.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt id="progetto.higgs_2e2mu.keras_model">
+<code class="sig-prename descclassname">progetto.higgs_2e2mu.</code><code class="sig-name descname">keras_model</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">in_dim</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/progetto/higgs_2e2mu.html#keras_model"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#progetto.higgs_2e2mu.keras_model" title="Permalink to this definition">¶</a></dt>
+<dd><p>Initialize, define and customize Keras model.</p>
+<dl class="simple">
+<dt>Args:</dt><dd><p>in_dim (int): input dimension to model.</p>
+</dd>
+<dt>Returns:</dt><dd><p>tensorflow.keras.models.Sequential: defined Keras model.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt id="progetto.higgs_2e2mu.ml_plot">
+<code class="sig-prename descclassname">progetto.higgs_2e2mu.</code><code class="sig-name descname">ml_plot</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">models</span></em>, <em class="sig-param"><span class="n">IN_DIM</span></em>, <em class="sig-param"><span class="n">rep_train</span></em>, <em class="sig-param"><span class="n">rep_higgs</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/progetto/higgs_2e2mu.html#ml_plot"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#progetto.higgs_2e2mu.ml_plot" title="Permalink to this definition">¶</a></dt>
+<dd><p>Plot all the models and two points from two different filters
+of the std analysis are added.</p>
+<dl class="simple">
+<dt>Args:</dt><dd><p>models (dict): dictionary containing all models evalutation.
+IN_DIM (int): input dimension to model.
+rep_train (Report): Report of filter on Higgs mass only.
+rep_higgs (Report): Report of all filters and Higgs mass.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt id="progetto.higgs_2e2mu.ml_preprocessing">
+<code class="sig-prename descclassname">progetto.higgs_2e2mu.</code><code class="sig-name descname">ml_preprocessing</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">sig</span></em>, <em class="sig-param"><span class="n">bkg</span></em>, <em class="sig-param"><span class="n">branches</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/progetto/higgs_2e2mu.html#ml_preprocessing"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#progetto.higgs_2e2mu.ml_preprocessing" title="Permalink to this definition">¶</a></dt>
+<dd><p>Prepare the numpy arrays to be read by most ML tools.</p>
+<p>Reduce the amount of data to a fixed fraction of orginal dataset.
+(The fraction can be changed editing entries_frac variable)
+Perform data labeling, standardization and shuffling.</p>
+<p>The arrays are saved to local .npy files.</p>
+<dl class="simple">
+<dt>Args:</dt><dd><p>sig (numpy.ndarray): RDF converted to numpy array of “sig”.
+bkg (numpy.ndarray): RDF converted to numpy array of “bkg”.
+branches (list): list of branches name.</p>
+</dd>
+<dt>Returns:</dt><dd><p>tuple: standardized and shuffled data, data labels.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt id="progetto.higgs_2e2mu.ml_request">
+<code class="sig-prename descclassname">progetto.higgs_2e2mu.</code><code class="sig-name descname">ml_request</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">ml_data</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/progetto/higgs_2e2mu.html#ml_request"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#progetto.higgs_2e2mu.ml_request" title="Permalink to this definition">¶</a></dt>
+<dd><p>Prepare dataset to be readable by the machine learning  method.
+(Lazy)</p>
+<p>Check if local dataset are already present (from previous execution
+or manual import) and load the RDF to return.</p>
+<p>If not then filter data and define variables useful for ML training.
+Save to local file (through lazy Snapshot) the RDF to return.</p>
+<p>Perform additional filter on Higgs mass only to produce Reports, the
+output RDF are not filtered on it.</p>
+<dl class="simple">
+<dt>Args:</dt><dd><p>ml_data (list): list of RDF to process.</p>
+</dd>
+<dt>Returns:</dt><dd><p>list: list of prepared RDF
+list: list of Report H mass filters on the prepared RDF</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt id="progetto.higgs_2e2mu.ml_retrieve">
+<code class="sig-prename descclassname">progetto.higgs_2e2mu.</code><code class="sig-name descname">ml_retrieve</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">df_train</span></em>, <em class="sig-param"><span class="n">rep_train</span></em>, <em class="sig-param"><span class="n">rep_higgs</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/progetto/higgs_2e2mu.html#ml_retrieve"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#progetto.higgs_2e2mu.ml_retrieve" title="Permalink to this definition">¶</a></dt>
+<dd><p>Retrieve the dataset to train a ML or a DNN model,
+perform the training and testing and plot them in a ROC curve for
+comparison.
+The code is set to search the trained models locally and load them,
+to perform the training remove the relative file/dir from the
+working drectory.
+The number of given events, features and ephocs (for the keras model)
+can be set. (Instant unless local trained model is found)
+Warning: In ml_request: ml_var are the features available, they can be
+selected but must always be the same size of IN_DIM.
+Hence if any change is applied over the dataset, make sure to either
+remove or rename the local file when necessary</p>
+<dl class="simple">
+<dt>Args:</dt><dd><p>df_train (list): list of training RDF.
+rep_train (Report): Report of filter on Higgs mass only.
+rep_higgs (Report): Report of all filters and Higgs mass.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt id="progetto.higgs_2e2mu.model_eval">
+<code class="sig-prename descclassname">progetto.higgs_2e2mu.</code><code class="sig-name descname">model_eval</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">name</span></em>, <em class="sig-param"><span class="n">model</span></em>, <em class="sig-param"><span class="n">X_test</span></em>, <em class="sig-param"><span class="n">y_test</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/progetto/higgs_2e2mu.html#model_eval"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#progetto.higgs_2e2mu.model_eval" title="Permalink to this definition">¶</a></dt>
+<dd><p>Evaluate the performaces of the classifier.</p>
+<dl>
+<dt>ROC parameters are calculated: false positive rate (fpr)</dt><dd><p>true positive rate (tpr)
+thresholds
+area under curve (AUC)</p>
+</dd>
+<dt>Args:</dt><dd><p>name (str): model name.
+model ([various types]): trained model, can be of different</p>
+<blockquote>
+<div><p>type depending on chosen model.</p>
+</div></blockquote>
+<p>X_test (numpy.ndarray): test dataset.
+y_test (numpy.ndarray): test data labels.</p>
+</dd>
+<dt>Returns:</dt><dd><p>dict: dictionary containing the model ROC parameters</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt id="progetto.higgs_2e2mu.model_train">
+<code class="sig-prename descclassname">progetto.higgs_2e2mu.</code><code class="sig-name descname">model_train</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">name</span></em>, <em class="sig-param"><span class="n">IN_DIM</span></em>, <em class="sig-param"><span class="n">X_train</span></em>, <em class="sig-param"><span class="n">X_val</span></em>, <em class="sig-param"><span class="n">y_train</span></em>, <em class="sig-param"><span class="n">y_val</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/progetto/higgs_2e2mu.html#model_train"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#progetto.higgs_2e2mu.model_train" title="Permalink to this definition">¶</a></dt>
+<dd><p>Try to load the already trained model of the chosen name, if not
+present initialize and train the default model, save and return it.</p>
+<p>WARNING: joblib is basically equivalet to Python pickle with an optimized handling
+for large numpy arrays, therefore it works only with matching python and sklearn
+versions. If different, the code is set to train again the models.
+Edit of the models characteristics is possible but only the N_EPOCHS is
+recorded in the saved file of the model</p>
+<dl class="simple">
+<dt>Args:</dt><dd><p>name (str): model name.
+IN_DIM (int): input dimension to model.
+X_train (numpy.ndarray): train dataset.
+X_val (numpy.ndarray): validation dataset.
+y_train (numpy.ndarray): training data labels.
+y_val (numpy.ndarray): validation data labels.</p>
+</dd>
+<dt>Returns:</dt><dd><p>dict: dicionary containing model (and training history if keras).</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt id="progetto.higgs_2e2mu.preliminar_plot">
+<code class="sig-prename descclassname">progetto.higgs_2e2mu.</code><code class="sig-name descname">preliminar_plot</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">df_key</span></em>, <em class="sig-param"><span class="n">branch_histo</span></em>, <em class="sig-param"><span class="n">histo_data</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/progetto/higgs_2e2mu.html#preliminar_plot"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#progetto.higgs_2e2mu.preliminar_plot" title="Permalink to this definition">¶</a></dt>
+<dd><p>Plot preliminar analysis histograms of the selected dataset
+and branches.
+The histograms are saved both in a .pdf and in a .root file
+in order to be further investigated.</p>
+<dl class="simple">
+<dt>Args:</dt><dd><p>df_key (str): selected dataset name.
+branch_histo (list): list of selected branches.
+histo_data (TH1D): histogram of given dataset and branches.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt id="progetto.higgs_2e2mu.preliminar_request">
+<code class="sig-prename descclassname">progetto.higgs_2e2mu.</code><code class="sig-name descname">preliminar_request</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">flag</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/progetto/higgs_2e2mu.html#preliminar_request"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#progetto.higgs_2e2mu.preliminar_request" title="Permalink to this definition">¶</a></dt>
+<dd><p>First look at the chosen input file. (Lazy)</p>
+<p>Prompt the user to select dataset and branche(s) to preview.</p>
+<p>This function is meant to explore only first hand characteristics of
+events and by default it will show three variables reconstructed
+form the components present in datasets.</p>
+<p>Prepare histograms of chosen data.</p>
+<dl class="simple">
+<dt>Args:</dt><dd><p>flag (bool): boolean flag to save local file or not.</p>
+</dd>
+<dt>Returns:</dt><dd><p>str: key to access the dataset (e.g. “signal”).
+list: selected branches list.
+list: selected THisto1D list.</p>
+</dd>
+</dl>
+<p>Raises: key error if user insert an invalid key.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt id="progetto.higgs_2e2mu.preliminar_retrieve">
+<code class="sig-prename descclassname">progetto.higgs_2e2mu.</code><code class="sig-name descname">preliminar_retrieve</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">df_key</span></em>, <em class="sig-param"><span class="n">branches</span></em>, <em class="sig-param"><span class="n">histos</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/progetto/higgs_2e2mu.html#preliminar_retrieve"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#progetto.higgs_2e2mu.preliminar_retrieve" title="Permalink to this definition">¶</a></dt>
+<dd><p>Retrieve and plot requested histograms. (Instant)</p>
+<dl class="simple">
+<dt>Args:</dt><dd><p>df_key (str): dataset key to access (e.g. “signal”).
+branches (list): list of branches to process.
+histos (list): list of THisto1D to draw and save.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt id="progetto.higgs_2e2mu.reco_define">
+<code class="sig-prename descclassname">progetto.higgs_2e2mu.</code><code class="sig-name descname">reco_define</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">df_2e2mu</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/progetto/higgs_2e2mu.html#reco_define"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#progetto.higgs_2e2mu.reco_define" title="Permalink to this definition">¶</a></dt>
+<dd><p>Defines all the main variables, such as Z, H and its angular
+variables. (Lazy)</p>
+<dl class="simple">
+<dt>Args:</dt><dd><p>df (RDataFrame): RDF to add new variables to.</p>
+</dd>
+<dt>Returns:</dt><dd><p>RDataFrame: RDF with added variables.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt id="progetto.higgs_2e2mu.reco_higgs">
+<code class="sig-prename descclassname">progetto.higgs_2e2mu.</code><code class="sig-name descname">reco_higgs</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">df</span></em>, <em class="sig-param"><span class="n">weight</span></em>, <em class="sig-param"><span class="n">weight_ang</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/progetto/higgs_2e2mu.html#reco_higgs"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#progetto.higgs_2e2mu.reco_higgs" title="Permalink to this definition">¶</a></dt>
+<dd><p>Recontruct the Higgs mass and the angular variables. (Lazy)</p>
+<dl>
+<dt>Args:</dt><dd><p>df (RDataFrame): RDF to process.
+weight (float): Weight values to rescale “sig” and “bkg”</p>
+<blockquote>
+<div><p>for Higgs mass histogram.</p>
+</div></blockquote>
+<dl class="simple">
+<dt>weight_ang (float): Weight values to rescale “sig” and “bkg”</dt><dd><p>for angular variables histograms.</p>
+</dd>
+</dl>
+</dd>
+<dt>Returns:</dt><dd><p>THist1D: Histogram of the reconstructed Higgs mass.
+RResultPtr&lt; RCutFlowReport &gt;: Report of filters applied.
+list: list of 5 angular variables histograms.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt id="progetto.higgs_2e2mu.show_cut">
+<code class="sig-prename descclassname">progetto.higgs_2e2mu.</code><code class="sig-name descname">show_cut</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">df_2e2m</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/progetto/higgs_2e2mu.html#show_cut"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#progetto.higgs_2e2mu.show_cut" title="Permalink to this definition">¶</a></dt>
+<dd><p>Compare unfiltered and filtered data for each filter,
+considering the main cuts used in the analysis published on CERN Open Data.</p>
+<dl class="simple">
+<dt>Args:</dt><dd><p>df_2e2m (RDataFrame): RDF to be filtered.</p>
+</dd>
+<dt>Returns:</dt><dd><dl class="simple">
+<dt>dict: filters dictionary.</dt><dd><p>The keys are the filters, the values are lists containing:
+unfiltered histos, filtered histos, filter RDF Reports.
+Each single filter contains the histograms of all the
+variables that define it.</p>
+</dd>
+</dl>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt id="progetto.higgs_2e2mu.snapshot">
+<code class="sig-prename descclassname">progetto.higgs_2e2mu.</code><code class="sig-name descname">snapshot</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">df</span></em>, <em class="sig-param"><span class="n">filename</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/progetto/higgs_2e2mu.html#snapshot"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#progetto.higgs_2e2mu.snapshot" title="Permalink to this definition">¶</a></dt>
+<dd><p>Make a snapshot of RDataFrame to local file. (Lazy)</p>
+<dl class="simple">
+<dt>Args:</dt><dd><p>df (RDataFrame): RDF to save.
+filename (str): name of the file to save</p>
+</dd>
+<dt>Returns:</dt><dd><p>RDataFrame: same RDF as input.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt id="progetto.higgs_2e2mu.standard_define">
+<code class="sig-prename descclassname">progetto.higgs_2e2mu.</code><code class="sig-name descname">standard_define</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">df</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/progetto/higgs_2e2mu.html#standard_define"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#progetto.higgs_2e2mu.standard_define" title="Permalink to this definition">¶</a></dt>
+<dd><p>Define and add to the input RDF the variables that
+will be used for filter events in the standard analysis. (Lazy)</p>
+<p>All the variables that are more significant for the analysis, such as
+Z, H and the angular variables are regrouped and defined in a
+specific function to make clearer the main points of the workflow
+and to be more easily accessible from the ML functions.</p>
+<dl class="simple">
+<dt>Args:</dt><dd><p>df (RDataFrame): RDF to add new variables to.</p>
+</dd>
+<dt>Returns:</dt><dd><p>RDataFrame: RDF with added variables.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt id="progetto.higgs_2e2mu.standard_request">
+<code class="sig-prename descclassname">progetto.higgs_2e2mu.</code><code class="sig-name descname">standard_request</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">flag</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/progetto/higgs_2e2mu.html#standard_request"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#progetto.higgs_2e2mu.standard_request" title="Permalink to this definition">¶</a></dt>
+<dd><p>Prepares all the necessary requests for the standard analysis.
+(Lazy)</p>
+<dl>
+<dt>Args:</dt><dd><p>flag (bool): boolean flag to save local file or not.</p>
+</dd>
+<dt>Returns:</dt><dd><p>dict: dictionary of “sig” and “bkg” filters.
+list: list of 3 THisto1D of Higgs mass (“sig”, “bkg”, “data”).
+list: list of 3 RDF Report of Higgs mass (“sig”, “bkg”, “data”).
+RDataFrame: RDF for ML analysis.
+OrderedDict: angular variables ordered dictionary.</p>
+<blockquote>
+<div><p>The keys are the angular variables, the values are
+lists of 3 THisto1D of the given variable
+(“sig”, “bkg”, “data”).</p>
+</div></blockquote>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt id="progetto.higgs_2e2mu.standard_retrieve">
+<code class="sig-prename descclassname">progetto.higgs_2e2mu.</code><code class="sig-name descname">standard_retrieve</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">filters</span></em>, <em class="sig-param"><span class="n">histos_higgs</span></em>, <em class="sig-param"><span class="n">reps_higgs</span></em>, <em class="sig-param"><span class="n">angulars</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/progetto/higgs_2e2mu.html#standard_retrieve"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#progetto.higgs_2e2mu.standard_retrieve" title="Permalink to this definition">¶</a></dt>
+<dd><p>Retrieve and plot requested histograms of Higgs mass and
+angular variables. (Instant)</p>
+<p>Generate 6 histogram plots: one for Higgs mass and one for each
+of the angular variables. Each histogram contains 3 datasets.</p>
+<p>If the code is in only standard mode, here the event loop will be triggered</p>
+<dl>
+<dt>Args:</dt><dd><p>filters (dict): dictionary of “sig” and “bkg” filters.
+histos_higgs (list): list of 3 THisto1D of Higgs mass (“sig”, “bkg”, “data”).
+reps_higgs (list): list of 3 RDF Report of Higgs mass (“sig”, “bkg”, “data”).
+angulars (OrderedDict): angular variables ordered dictionary.</p>
+<blockquote>
+<div><p>The keys are the angular variables, the values are
+lists of 3 THisto1D of the given variable
+(“sig”, “bkg”, “data”).</p>
+</div></blockquote>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt id="progetto.higgs_2e2mu.style">
+<code class="sig-prename descclassname">progetto.higgs_2e2mu.</code><code class="sig-name descname">style</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">h</span></em>, <em class="sig-param"><span class="n">mode</span></em>, <em class="sig-param"><span class="n">Rcolor</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/progetto/higgs_2e2mu.html#style"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#progetto.higgs_2e2mu.style" title="Permalink to this definition">¶</a></dt>
+<dd><p>Set the basic style of a given histogram depending on which mode
+is required. (Lazy)</p>
+<dl>
+<dt>Args:</dt><dd><p>h (TH1D): Root histogram to style.
+mode (str): “e” for empty style, “f” for filled style,</p>
+<blockquote>
+<div><p>“m” for marker style.</p>
+</div></blockquote>
+<p>Rcolor (Tcolor): Root color to apply.</p>
+</dd>
+<dt>Returns:</dt><dd><p>TH1D: styled histogram</p>
+</dd>
+</dl>
+</dd></dl>
+
+</div>
+<div class="section" id="module-progetto">
+<span id="module-contents"></span><h2>Module contents<a class="headerlink" href="#module-progetto" title="Permalink to this headline">¶</a></h2>
+</div>
+</div>
+
+
+           </div>
+           
+          </div>
+          <footer>
+  
+    <div class="rst-footer-buttons" role="navigation" aria-label="footer navigation">
+      
+        <a href="readme.html" class="btn btn-neutral float-right" title="README" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right"></span></a>
+      
+      
+        <a href="modules.html" class="btn btn-neutral float-left" title="progetto" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left"></span> Previous</a>
+      
+    </div>
+  
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>
+        
+        &copy; Copyright 2020, Silvia Benegiano
+
+    </p>
+  </div>
+    
+    
+    
+    Built with <a href="http://sphinx-doc.org/">Sphinx</a> using a
+    
+    <a href="https://github.com/rtfd/sphinx_rtd_theme">theme</a>
+    
+    provided by <a href="https://readthedocs.org">Read the Docs</a>. 
+
+</footer>
+
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+  
+
+  <script type="text/javascript">
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script>
+
+  
+  
+    
+   
+
+</body>
+</html>
