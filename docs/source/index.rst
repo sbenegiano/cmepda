@@ -4,7 +4,7 @@
    contain the root `toctree` directive.
 
 Welcome to Higgs 2e2mu - CMEPDA Project's documentation!
-=============================================
+========================================================
 
 .. toctree::
    :maxdepth: 2

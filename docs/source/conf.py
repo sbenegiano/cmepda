@@ -92,3 +92,4 @@ htmlhelp_basename = 'higgs2e2mudoc'
 # ]
 
 # -- Extension configuration -------------------------------------------------
+autodoc_mock_imports = ["ROOT"]
