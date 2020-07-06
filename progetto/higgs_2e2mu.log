@@ -1,7 +1,12 @@
-2020-07-05 12:44:53,974 WARNING Problem loading local df:signal.
+2020-07-06 19:33:01,097 WARNING Problem loading local df:signal.
  Starting download
-2020-07-05 12:45:27,366 INFO standard request time: 1.09s
-2020-07-05 12:46:09,041 INFO Standard retrieve time: 41.67s
-2020-07-05 12:46:16,031 INFO You have chosen to perform only standard analysis
-2020-07-05 12:46:16,031 INFO elapsed code time: 82.06s
+2020-07-06 19:33:48,270 WARNING Error!  is an invalid key!
+2020-07-06 19:33:48,270 INFO These are the chosen branches plus the default 3:['Muon_ip3d', 'El_ip3d', 'PV_3d']
+2020-07-06 19:33:48,497 INFO It will pass to the requests for standard analysis
+2020-07-06 19:33:49,265 INFO standard request time: 0.73s
+2020-07-06 19:33:53,970 INFO One day minumun and maximun of the Muon_ip3d will be useful...but it is NOT This day!(2825.5986247346636, 8.077836355369072e-06)
+2020-07-06 19:33:54,128 INFO One day minumun and maximun of the El_ip3d will be useful...but it is NOT This day!(193.91681237476223, 2.7224847144680098e-05)
+2020-07-06 19:33:54,179 INFO One day minumun and maximun of the PV_3d will be useful...but it is NOT This day!(49.57406386733055, 0.45801010727882385)
+2020-07-06 19:34:19,590 INFO Standard retrieve time: 25.37s
+2020-07-06 19:34:19,590 INFO elapsed code time: 81.88s
 
