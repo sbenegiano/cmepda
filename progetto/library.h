@@ -7,12 +7,14 @@
 using rvec = const ROOT::VecOps::RVec<float> &;
 const auto z = 91.2;
 
+// Definiton of the DeltaR variable to apply the filter on el and mu separately
 float dr_def( rvec part_eta, rvec part_phi)
 {
     float part_dr = ROOT::VecOps::DeltaR(part_eta[0], part_eta[1], part_phi[0], part_phi[1]);
     return part_dr;
 }
 
+// Cut over DeltaR
 bool dr_cut( rvec mu_eta, rvec mu_phi, rvec el_eta, rvec el_phi )
 {
     auto mu_dr = ROOT::VecOps::DeltaR(mu_eta[0], mu_eta[1], mu_phi[0], mu_phi[1]);
@@ -23,6 +25,7 @@ bool dr_cut( rvec mu_eta, rvec mu_phi, rvec el_eta, rvec el_phi )
     return true;
 }
 
+// Cut over pt
 bool pt_cut(rvec mu_pt, rvec el_pt)
 {
     auto mu_pt_sorted = ROOT::VecOps::Reverse(ROOT::VecOps::Sort(mu_pt));
@@ -36,6 +39,7 @@ bool pt_cut(rvec mu_pt, rvec el_pt)
     return false;
 }
 
+// Compute Z mass from two electrons and two muons
 ROOT::VecOps::RVec<float> z_mass(rvec el_pt, rvec el_eta, rvec el_phi, rvec el_mass,
                                  rvec mu_pt, rvec mu_eta, rvec mu_phi, rvec mu_mass)
 {
@@ -67,6 +71,7 @@ float h_mass(rvec el_pt, rvec el_eta, rvec el_phi, rvec el_mass,
     return (p1 + p2 + p3 + p4).M();
 }
 
+// Compute of costheta*
 float costheta_star(rvec el_pt, rvec el_eta, rvec el_phi, rvec el_mass,
                  rvec mu_pt, rvec mu_eta, rvec mu_phi, rvec mu_mass)
 {
@@ -94,6 +99,7 @@ float costheta_star(rvec el_pt, rvec el_eta, rvec el_phi, rvec el_mass,
     return costheta_star;
 }
 
+// Compute of costheta 1 and 2
 ROOT::VecOps::RVec<float> costheta(rvec el_pt, rvec el_eta, rvec el_phi, rvec el_mass, rvec el_charge,
                                    rvec mu_pt, rvec mu_eta, rvec mu_phi, rvec mu_mass, rvec mu_charge)
 {
@@ -141,6 +147,7 @@ ROOT::VecOps::RVec<float> costheta(rvec el_pt, rvec el_eta, rvec el_phi, rvec el
     return costheta_vector;
 }
 
+// Compute of phi and phi1
 ROOT::VecOps::RVec<float> measure_phi(rvec el_pt, rvec el_eta, rvec el_phi, rvec el_mass, rvec el_charge,
                                       rvec mu_pt, rvec mu_eta, rvec mu_phi, rvec mu_mass, rvec mu_charge)
 {
