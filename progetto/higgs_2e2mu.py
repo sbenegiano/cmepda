@@ -28,8 +28,6 @@ from tensorflow.keras.regularizers import l2
 from tensorflow.keras.optimizers import SGD
 from tensorflow.keras.utils import to_categorical, plot_model
 
-
-
 #Necessary option in order for argparse to function, if not present ROOT will
 #prevail over argparse when option are passed from command line
 # ROOT.PyConfig.IgnoreCommandLineOptions = True
@@ -137,7 +135,7 @@ def df_prefilter(df_key):
     Returns:
         RDataFrame: Filtered RDF of chosen dataset.
     """
-    # In this code we will consider only events with 2 or more
+    # In this analysis we will consider only events with 2 or more
     # electrons and muons
     df_net = ROOT.RDataFrame("Events", dataset_link.get(df_key))
     df_2e2m = df_net.Filter("nElectron>=2 && nMuon>=2",
@@ -194,12 +192,12 @@ def preliminar_request(flag):
 
     Raises: key error if user insert an invalid key.
     """
-    key_df = input("Insert the data frame you want to look at first "
+    df_key = input("Insert the data frame you want to look at first "
                    f"choosing from this list:\n{dataset_link.keys()}\n")
 
     try:
         #3D reconstruction of some fundamental variables and its Histograms
-        df_In = access_df(key_df, flag, "p")
+        df_In = access_df(df_key, flag, "p")
         # These are the default branches that are reconstructed regardless the input given
         df_In3d = df_In.Define("PV_3d", "sqrt(PV_x*PV_x + PV_y*PV_y + PV_z*PV_z)")\
                        .Define("Muon_ip3d", "sqrt(Muon_dxy*Muon_dxy + Muon_dz*Muon_dz)")\
@@ -207,7 +205,7 @@ def preliminar_request(flag):
 
         # In this way nothing is saved locally but the original list of available
         # columns can be shown
-        df = access_df(key_df, False, "p")
+        df = access_df(df_key, False, "p")
         list_branches = df.GetColumnNames()
 
         # Decide which variables to look first
@@ -229,7 +227,7 @@ def preliminar_request(flag):
         unique_b_In = list(set(b_In))
         logger.info(f"These are the chosen branches plus the default 3:{unique_b_In}")
 
-        # Require the chosen df and request the histos
+        # Request the histos
         h_In = []
         for branch in unique_b_In:
             current_histo = df_In3d.Histo1D(branch)
@@ -238,16 +236,16 @@ def preliminar_request(flag):
     except KeyError as e:
         print(f"Cannot read the given key!\n{e}")
         sys.exit(1)
-    return key_df, unique_b_In, h_In
+    return df_key, unique_b_In, h_In
 
-def preliminar_plot(dataset, branch_histo, histo_data):
+def preliminar_plot(df_key, branch_histo, histo_data):
     """Plot preliminar analysis histograms of the selected dataset
     and branches.
     The histograms are saved both in a .pdf and in a .root file
     in order to be further investigated.
 
     Args:
-        dataset (str): selected dataset name.
+        df_key (str): selected dataset name.
         branch_histo (list): list of selected branches.
         histo_data (TH1D): histogram of given dataset and branches.
     """
@@ -275,25 +273,25 @@ def preliminar_plot(dataset, branch_histo, histo_data):
     legend.SetBorderSize(1)
     legend.SetLineWidth(0)
     legend.SetTextSize(0.04)
-    legend.AddEntry(histo_data, dataset)
+    legend.AddEntry(histo_data, df_key)
     legend.Draw()
 
     #Save plot
-    c_histo.SaveAs(f"{branch_histo}_{dataset}.pdf")
-    c_histo.SaveAs(f"{branch_histo}_{dataset}.root")
+    c_histo.SaveAs(f"{branch_histo}_{df_key}.pdf")
+    c_histo.SaveAs(f"{branch_histo}_{df_key}.root")
 
-def preliminar_retrieve(key_df, branches, histos):
+def preliminar_retrieve(df_key, branches, histos):
     """Retrieve and plot requested histograms. (Instant)
 
     Args:
-        key_df (str): dataset key to access (e.g. "signal").
+        df_key (str): dataset key to access (e.g. "signal").
         branches (list): list of branches to process.
         histos (list): list of THisto1D to draw and save.
     """
     # Trigger event loop and plot
     for branch, hist in zip(branches, histos):
         h = hist.GetValue()
-        preliminar_plot(key_df, branch, h)
+        preliminar_plot(df_key, branch, h)
 
 def standard_define(df):
     """Define and add to the input RDF the variables that
@@ -588,21 +586,21 @@ def standard_request(flag):
     logger.info(f"standard request time: {stop1-start1:.2f}s")
     return dict_filter, list_higgs, list_rep_higgs, df_ml, dict_angular
 
-def filtered_plot(h_sig, h_bkg, rep_s, rep_b, fil):
+def filtered_plot(histo_sig, histo_bkg, reps_sig, reps_bkg, fil):
     """Generate histogram(s) figure for given filter. Save to file.
 
     Multiple histograms (filter with more than one variable) are generated
     on separated plots and put in the same figure.
 
     Args:
-        h_sig (list): list of unfiltered and filtered histogram(s) of "sig".
-        h_bkg (list): list of unfiltered and filtered histogram(s) of "bkg".
-        rep_s (list): list of filter report(s) of "sig".
-        rep_b (list): list of filter report(s) of "bkg".
+        histo_sig (list): list of unfiltered and filtered histogram(s) of "sig".
+        histo_bkg (list): list of unfiltered and filtered histogram(s) of "bkg".
+        reps_sig (list): list of filter report(s) of "sig".
+        reps_bkg (list): list of filter report(s) of "bkg".
         fil (str): filter name, used to set title of plot and save file.
     """
-    h_uf_s, h_f_s = h_sig
-    h_uf_b, h_f_b = h_bkg
+    h_uf_s, h_f_s = histo_sig
+    h_uf_b, h_f_b = histo_bkg
 
     # Add canvas
     canvas = ROOT.TCanvas("canvas", "", 800, 500)
@@ -631,7 +629,7 @@ def filtered_plot(h_sig, h_bkg, rep_s, rep_b, fil):
 
     for i, (h1, h2, h3, h4, rep12, rep34) in enumerate(zip(h_uf_s, h_f_s,
                                                            h_uf_b, h_f_b,
-                                                           rep_s, rep_b)):
+                                                           reps_sig, reps_bkg)):
         canvas.cd()
         h_ustyle_s = style(h1, "e", ROOT.kRed)
         h_fstyle_s = style(h2, "f", ROOT.kRed)
@@ -639,7 +637,6 @@ def filtered_plot(h_sig, h_bkg, rep_s, rep_b, fil):
         h_fstyle_b = style(h4, "f", ROOT.kAzure)
 
         pad = ROOT.TPad(f"pad_{i}", f"pad_{i}", 0, i*delta_y, 1, (1+i)*delta_y)
-        # pad.SetTopMargin(0)
         pad.Draw()
         pad.cd()
         h_ustyle_b.GetXaxis().SetTitle(f"{units_dict[fil][i]}")
@@ -671,12 +668,12 @@ def filtered_plot(h_sig, h_bkg, rep_s, rep_b, fil):
     #Save plot
     canvas.SaveAs(f"{fil}.pdf")
 
-def higgs_plot(list_histo_higgs, filename):
+def higgs_plot(histos_higgs, filename):
     """Plot reconstructed Higgs mass for signal, background and data.
     Save figure to file.
 
     Args:
-        list_histo_higgs (list): list of histograms of Higgs mass
+        histos_higgs (list): list of histograms of Higgs mass
                                  of "sig", "bkg" and "data".
         filename (str): name of file to save.
     """
@@ -689,11 +686,10 @@ def higgs_plot(list_histo_higgs, filename):
 
     # Add canvas
     canvas_s = ROOT.TCanvas("canvas_s", "", 800, 700)
-    #  header = ROOT.TLatex()
 
-    h_signal = style(list_histo_higgs[0], "e", ROOT.kRed)
-    h_background = style(list_histo_higgs[1], "f", ROOT.kAzure)
-    h_data = style(list_histo_higgs[2], "m", ROOT.kBlack)
+    h_signal = style(histos_higgs[0], "e", ROOT.kRed)
+    h_background = style(histos_higgs[1], "f", ROOT.kAzure)
+    h_data = style(histos_higgs[2], "m", ROOT.kBlack)
 
     if filename == "h_mass":
         h_background.GetYaxis().SetRangeUser(0, 5)
@@ -717,9 +713,9 @@ def higgs_plot(list_histo_higgs, filename):
     legend.SetLineWidth(1)
     legend.SetTextSize(0.025)
 
-    legend.AddEntry(list_histo_higgs[0], "Signal")
-    legend.AddEntry(list_histo_higgs[1], "Background")
-    legend.AddEntry(list_histo_higgs[2], "Data")
+    legend.AddEntry(histos_higgs[0], "Signal")
+    legend.AddEntry(histos_higgs[1], "Background")
+    legend.AddEntry(histos_higgs[2], "Data")
     legend.Draw()
 
     if filename == "h_mass":
@@ -731,7 +727,7 @@ def higgs_plot(list_histo_higgs, filename):
     #Save plot
     canvas_s.SaveAs(f"{filename}.pdf")
 
-def standard_retrieve(filters, h_higgs, rep_higgs, angular):
+def standard_retrieve(filters, histos_higgs, reps_higgs, angulars):
     """Retrieve and plot requested histograms of Higgs mass and
     angular variables. (Instant)
 
@@ -742,9 +738,9 @@ def standard_retrieve(filters, h_higgs, rep_higgs, angular):
 
     Args:
         filters (dict): dictionary of "sig" and "bkg" filters.
-        h_higgs (list): list of 3 THisto1D of Higgs mass ("sig", "bkg", "data").
-        rep_higgs (list): list of 3 RDF Report of Higgs mass ("sig", "bkg", "data").
-        angular (OrderedDict): angular variables ordered dictionary.
+        histos_higgs (list): list of 3 THisto1D of Higgs mass ("sig", "bkg", "data").
+        reps_higgs (list): list of 3 RDF Report of Higgs mass ("sig", "bkg", "data").
+        angulars (OrderedDict): angular variables ordered dictionary.
                                The keys are the angular variables, the values are
                                lists of 3 THisto1D of the given variable
                                ("sig", "bkg", "data").
@@ -760,9 +756,9 @@ def standard_retrieve(filters, h_higgs, rep_higgs, angular):
                            "Z_mass":[[], [], []]}}
     for cut in filters["sig"].keys():
         for ch in filters.keys():
-            for i, h_list in enumerate(filters[ch][cut][:2]):
-                for histo in h_list:
-                    filters_data[ch][cut][i].append(histo.GetValue())
+            for i, histo_list in enumerate(filters[ch][cut][:2]):
+                for h in histo_list:
+                    filters_data[ch][cut][i].append(h.GetValue())
             filters_data[ch][cut][2] = filters[ch][cut][2]
         h_sig = filters_data["sig"][cut][:2]
         rep_sig = filters_data["sig"][cut][2]
@@ -773,20 +769,20 @@ def standard_retrieve(filters, h_higgs, rep_higgs, angular):
         filtered_plot(h_sig, h_bkg, rep_sig, rep_bkg, cut)
 
     list_higgs_data = []
-    for h in h_higgs:
+    for h in histos_higgs:
         h_higgs_data = h.GetValue()
         list_higgs_data.append(h_higgs_data)
     higgs_plot(list_higgs_data, "h_mass")
 
     angular_data = OrderedDict({"costheta_star":[], "costheta1":[], "costheta2":[],
                                 "phi":[], "phi1":[]})
-    for key, h_list in angular.items():
-        for hist in h_list:
-            angular_data[key].append(hist.GetValue())
+    for key, hist_list in angulars.items():
+        for h in hist_list:
+            angular_data[key].append(h.GetValue())
         higgs_plot(angular_data[key], key)
 
     # Print on shell the complete report on the standard analysis
-    for ch, rep in zip(["signal", "bakground", "data"], rep_higgs):
+    for ch, rep in zip(["signal", "bakground", "data"], reps_higgs):
         print(f"{ch} report:\n")
         rep.Print()
         print()
@@ -1139,7 +1135,7 @@ def ml_retrieve(df_train, rep_train, rep_higgs):
     """
     N_EVENTS = 100000 # Max available 134618 (update if edit entries_frac in ml_prepr)
     # N_COLUMNS = 22 # Max available 22
-    IN_DIM = 1
+    IN_DIM = 22
     try:
         # From now on all variables >1D have capital letter
         X_sh = np.load("x_sh_unbalanced.npy")
@@ -1171,11 +1167,11 @@ def ml_retrieve(df_train, rep_train, rep_higgs):
 
     #If the entries_frac in ml_preprocessing has been changed enable this to see
     # the new availabe dimension of the dataset
-    print(X_sh.shape, y_sh.shape)
+    # print(X_sh.shape, y_sh.shape)
 
     # Selection of the events and variables, the sliced columns Must be of
     # IN_DIM size
-    X_sh = X_sh[:N_EVENTS, 21:]
+    X_sh = X_sh[:N_EVENTS, :]
     y_sh = y_sh[:N_EVENTS]
 
     # Prepare train and test set, all models will need this, and validation set for keras
@@ -1241,11 +1237,11 @@ if __name__ == "__main__":
         if args.both:
             # Preliminary requests done. Let's go to the retrieving part
             preliminar_retrieve(key_df_prel, branches_prel, histos_prel)
-            # standard_retrieve(filter_dicts, h_higgs, rep_higgs, ang_dict)
-            ml_retrieve(ml_req_df, ml_req_rep, rep_higgs)
+            standard_retrieve(filter_dicts, h_higgs, rep_higgs, ang_dict)
+            # ml_retrieve(ml_req_df, ml_req_rep, rep_higgs)
         else:
-            # standard_retrieve(filter_dicts, h_higgs, rep_higgs, ang_dict)
-            ml_retrieve(ml_req_df, ml_req_rep, rep_higgs)
+            standard_retrieve(filter_dicts, h_higgs, rep_higgs, ang_dict)
+            # ml_retrieve(ml_req_df, ml_req_rep, rep_higgs)
             logger.info("You have chosen to perform only standard analysis")
     else:
         pass
