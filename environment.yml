@@ -1,17 +1,20 @@
-name: rtd_build
+name: cmepda_H2e2mu
 channels:
   - defaults
   # - conda-forge
 dependencies:
-  - python=3.6
-  - pip
-  # - root
+  - python=3.7
+  - pip=20.1.1
+  # - root>=6.20
   - pip:
     - sphinx>=3
     - sphinx-autoapi
     - sphinx_rtd_theme
-  #   - numpy==1.19.0
-  #   - matplotlib==3.2.2
-  #   - scipy==1.4.1
-  #   - tensorflow==2.2.0
-  #   - scikit-learn==0.23.1
+    # - numpy==1.19.0
+    # - matplotlib==3.2.2
+    # - scipy==1.4.1
+    # - tensorflow==2.2.0
+    # - scikit-learn==0.23.1
+
+# uncomment all lines above to set a local conda environment
+# comments are intended for readthedocs building the documentation
