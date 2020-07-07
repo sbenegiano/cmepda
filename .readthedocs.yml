@@ -22,8 +22,8 @@ python:
   version: 3.6
   install:
     - requirements: docs/requirements.txt
-    - method: pip
-      path: .
+    # - method: pip
+    #   path: .
 # Conda requirements
 # conda:
 #   environment: environment.yml
