@@ -1,6 +1,6 @@
 name: root_keras
 channels:
-  - defaults
+  # - defaults
   - conda-forge
 dependencies:
   - python=3.6
