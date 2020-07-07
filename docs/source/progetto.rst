@@ -1,9 +1,9 @@
 Higgs 2e2mu analysis
-================
+====================
 
 
 progetto.higgs\_2e2mu
-----------------------------
+---------------------
 
 .. automodule:: progetto.higgs_2e2mu
    :members:

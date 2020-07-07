@@ -43,11 +43,14 @@ extensions = [
     'sphinx.ext.mathjax',
     'sphinx.ext.ifconfig',
     'sphinx.ext.viewcode',
+    'autoapi.extension'
 ]
+autoapi_dirs = ['../../progetto']
+autoapi_generate_api_docs = False
 
-napoleon_google_docstring = False
-napoleon_use_param = False
-napoleon_use_ivar = True
+# napoleon_google_docstring = False
+# napoleon_use_param = False
+# napoleon_use_ivar = True
 
 # The master toctree document.
 master_doc = 'index'
@@ -92,4 +95,3 @@ htmlhelp_basename = 'higgs2e2mudoc'
 # ]
 
 # -- Extension configuration -------------------------------------------------
-autodoc_mock_imports = ["ROOT"]
