@@ -51,7 +51,7 @@ autoapi_generate_api_docs = False
 on_rtd = os.environ.get('READTHEDOCS') == 'True'
 if on_rtd:
     # autodoc_mock_imports = ["ROOT"]
-    autodoc_mock_imports = ["tensorflow", "numpy", "matplotlib", "sklearn", "joblib"]
+    autodoc_mock_imports = ["ROOT", "tensorflow", "numpy", "matplotlib", "sklearn", "joblib"]
 else:
     pass
 
