@@ -50,6 +50,19 @@ And check if everything is ok::
 If no import error are raised the environment is ready to run
 the project module(s).
 
+Colab way
+'''''''''
+
+If previous steps went wrong or there is no will to run the project
+locally an alternative is proposed.
+
+A Colab notebook has been prepared to set the environment to run the
+project.
+
+Visit this
+`link <https://colab.research.google.com/drive/1uqhEn-AOCnOiT0L6UO1IP9tX8pw2f3m2?usp=sharing>`_
+and follow alle the steps to get the code running.
+
 .. Root
 .. ''''
 .. Setting up Root can be tricky, to make things easy use conda.
