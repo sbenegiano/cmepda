@@ -1,3 +1,4 @@
+sphinx>=3
 numpy
 matplotlib
 scikit-learn==0.23.1
