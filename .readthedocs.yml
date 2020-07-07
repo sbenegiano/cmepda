@@ -25,5 +25,5 @@ python:
     - method: pip
       path: .
 # Conda requirements
-conda:
-  environment: environment.yml
+# conda:
+#   environment: environment.yml
