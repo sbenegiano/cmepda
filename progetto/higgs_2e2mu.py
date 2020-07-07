@@ -65,7 +65,7 @@ else:
     link_data = ROOT.std.vector("string")(2)
 
 #CMS data taken in 2012 (11.6 fb^(-1) integrated luminosity)
-link_data = ROOT.std.vector("string")(2)
+# link_data = ROOT.std.vector("string")(2)
 link_data[0] = "".join([base_url, "Run2012B_DoubleMuParked.root"])
 link_data[1] = "".join([base_url, "Run2012C_DoubleMuParked.root"])
 #Dict of link
