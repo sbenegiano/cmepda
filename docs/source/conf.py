@@ -48,11 +48,12 @@ extensions = [
 autoapi_dirs = ['../../progetto']
 autoapi_generate_api_docs = False
 
-# on_rtd = os.environ.get('READTHEDOCS') == 'True'
-# if on_rtd:
-#     autodoc_mock_imports = ["ROOT"]
-# else:
-#     pass
+on_rtd = os.environ.get('READTHEDOCS') == 'True'
+if on_rtd:
+    # autodoc_mock_imports = ["ROOT"]
+    autodoc_mock_imports = ["tensorflow"]
+else:
+    pass
 
 # napoleon_google_docstring = False
 # napoleon_use_param = False
