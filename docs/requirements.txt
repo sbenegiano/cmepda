@@ -1,3 +1,4 @@
+# These requirements don't have effect if conda requirements are set
 sphinx>=3
 sphinx-autoapi
 # numpy
