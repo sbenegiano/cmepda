@@ -1,11 +1,11 @@
 name: rtd_build
 channels:
   - defaults
-  - conda-forge
+  # - conda-forge
 dependencies:
   - python=3.6
   - pip
-  - root
+  # - root
   - pip:
     - sphinx>=3
     - sphinx-autoapi

@@ -47,13 +47,24 @@ ROOT.gInterpreter.ProcessLine('#include "library.h"')
 
 # Enable multi-threading
 # ROOT.ROOT.EnableImplicitMT(4)
-base_url = "root://eospublic.cern.ch//eos/root-eos/cms_opendata_2012_nanoaod/"
+
 #Imput links to signal, background and data samples
+base_url = "root://eospublic.cern.ch//eos/root-eos/cms_opendata_2012_nanoaod/"
+
 #Signal of Higgs -> 4 leptons
 link_sig = "".join([base_url, "SMHiggsToZZTo4L.root"])
 #Background of ZZ -> 4 leptons
 link_bkg = "".join([base_url, "ZZTo2e2mu.root"])
-#CMS data tacken in 2012 (11.6 fb^(-1) integrated luminosity)
+
+# this block is useful to make RTD compile the documentation, using
+# autodoc_mock_imports on ROOT would generate an error on link_data
+on_rtd = os.environ.get('READTHEDOCS') == 'True'
+if on_rtd:
+    link_data = ["", ""]
+else:
+    link_data = ROOT.std.vector("string")(2)
+
+#CMS data taken in 2012 (11.6 fb^(-1) integrated luminosity)
 link_data = ROOT.std.vector("string")(2)
 link_data[0] = "".join([base_url, "Run2012B_DoubleMuParked.root"])
 link_data[1] = "".join([base_url, "Run2012C_DoubleMuParked.root"])
