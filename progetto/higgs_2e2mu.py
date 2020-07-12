@@ -1249,10 +1249,10 @@ if __name__ == "__main__":
             # Preliminary requests done. Let's go to the retrieving part
             preliminar_retrieve(key_df_prel, branches_prel, histos_prel)
             standard_retrieve(filter_dicts, h_higgs, rep_higgs, ang_dict)
-            # ml_retrieve(ml_req_df, ml_req_rep, rep_higgs)
+            ml_retrieve(ml_req_df, ml_req_rep, rep_higgs)
         else:
             standard_retrieve(filter_dicts, h_higgs, rep_higgs, ang_dict)
-            # ml_retrieve(ml_req_df, ml_req_rep, rep_higgs)
+            ml_retrieve(ml_req_df, ml_req_rep, rep_higgs)
             logger.info("You have chosen to perform only standard analysis")
     else:
         pass
